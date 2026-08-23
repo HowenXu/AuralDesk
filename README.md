@@ -100,7 +100,7 @@ AuralDesk/
 
 本项目采用 [AGPL-3.0](LICENSE)。其中 `qqapi/app/qqmusic_api/` 部分沿用上游 [QQMusicApi](https://github.com/L-1124/QQMusicApi) 的 GPL-3.0 许可。
 
-仅用于解密你自己合法下载、有权使用的音频文件。音乐平台不易，请尊重版权，支持正版。
+本项目仅供下载学习使用，请在24小时内自行删除。
 
 ---
 

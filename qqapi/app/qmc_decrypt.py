@@ -20,7 +20,7 @@ QQMusic QMC 加密文件解密工具
 算法以 unlock-music 项目官方 Rust 实现（lib_um_crypto_rust）为参照逐一对拍移植，
 内置大量 Rust 单元测试向量，可用 --self-test 自检。
 
-仅用于解密你自己合法下载、有权使用的音频文件。
+本项目仅供下载学习使用，请在24小时内自行删除。
 """
 
 import argparse
