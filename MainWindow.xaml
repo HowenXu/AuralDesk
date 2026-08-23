@@ -1,0 +1,1665 @@
+﻿<Window x:Class="AuralDesk.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="AuralDesk" Height="720" Width="1120"
+        Icon="app.ico"
+        MinHeight="600" MinWidth="960"
+        Background="{StaticResource BgWindowBrush}"
+        FontFamily="Segoe UI"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        WindowStartupLocation="CenterScreen" KeyDown="Window_KeyDown">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ===================== Sidebar ===================== -->
+        <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
+                BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="0,0,1,0">
+            <DockPanel LastChildFill="False" Margin="16,24,16,16">
+
+                <!-- Logo -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                    <Image Width="64" Height="64" Source="pack://application:,,,/app_icon.png"
+                           Stretch="Uniform" VerticalAlignment="Center"/>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="AURALDESK" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text="HI-FI STREAMING" FontSize="9.5" Foreground="{StaticResource TextDimBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Nav -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,28,0,0">
+                    <Button x:Name="NavQueue" Tag="queue" Click="Nav_Click"
+                            Style="{StaticResource NavButtonStyle}" Content="播放队列"/>
+                    <Button x:Name="NavStream" Tag="stream" Click="Nav_Click"
+                            Style="{StaticResource NavButtonStyle}" Content="流媒体"/>
+                    <Button x:Name="NavSettings" Tag="settings" Click="Nav_Click"
+                            Style="{StaticResource NavButtonStyle}" Content="设置"/>
+                </StackPanel>
+
+                <!-- HQPlayer status card -->
+                <Border DockPanel.Dock="Bottom" CornerRadius="10" Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="12,10">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="HqStatusDot" Width="8" Height="8" Fill="{StaticResource TextDimBrush}"
+                                     VerticalAlignment="Center"/>
+                            <TextBlock Text="HQPlayer" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <TextBlock x:Name="HqStatusText" Text="未连接" FontSize="10.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- System stats (toggleable in Settings) -->
+                <Border x:Name="SystemStatsCard" DockPanel.Dock="Bottom" Visibility="Collapsed"
+                        CornerRadius="10" Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="12,10"
+                        Margin="0,8,0,0">
+                    <StackPanel>
+                        <TextBlock Text="系统资源" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <Grid x:Name="MemRow" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="内存" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="MemValue" Grid.Column="1" FontSize="10.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+                        <Grid x:Name="CpuRow" Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="CPU" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="CpuValue" Grid.Column="1" FontSize="10.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock DockPanel.Dock="Bottom" Text="v0.1.0 · 界面原型" FontSize="9.5"
+                           Foreground="{StaticResource TextDimBrush}" Margin="2,12,0,0"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ===================== Content ===================== -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top bar -->
+            <Border Grid.Row="0" Padding="20,12" BorderBrush="{StaticResource BorderCardBrush}"
+                    BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ViewTitle" Text="播放队列" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="来源" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox x:Name="SourceCombo" Width="116" Style="{StaticResource ComboStyle}"
+                                      SelectionChanged="SourceCombo_SelectionChanged">
+                                <ComboBoxItem Content="播放队列" Tag="queue"/>
+                                <ComboBoxItem Content="QQ音乐" Tag="https://y.qq.com" IsSelected="True"/>
+                                <ComboBoxItem Content="网易云音乐" Tag="https://music.163.com" IsEnabled="False"/>
+                                <ComboBoxItem Content="Apple Music" Tag="https://music.apple.com/cn/browse" IsEnabled="False"/>
+                                <ComboBoxItem Content="自定义 URL" Tag="custom"/>
+                            </ComboBox>
+                            <TextBlock Text="输出" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
+                                       VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <ComboBox x:Name="OutputCombo" Width="130" Style="{StaticResource ComboStyle}"
+                                      SelectionChanged="OutputCombo_SelectionChanged">
+                                <ComboBoxItem Content="系统输出" IsSelected="True"/>
+                                <ComboBoxItem Content="NAA（HQPlayer）"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <TextBlock Text="输出与升频配置请在 HQPlayer 中调整" FontSize="9"
+                                   Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"
+                                   Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===================== Queue view ===================== -->
+            <Grid x:Name="QueuePanel" Grid.Row="1" Margin="20,16,20,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 工具条 -->
+                <Border Grid.Row="0" Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1"
+                        CornerRadius="10" Padding="12,8">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="播放队列" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Border Width="1" Height="18" Background="{StaticResource BorderCardBrush}"
+                                Margin="14,0" VerticalAlignment="Center"/>
+                        <Button x:Name="QueueUpBtn" Content="上移" Style="{StaticResource TogglePillStyle}"
+                                Click="QueueUp_Click" Margin="0,0,8,0"/>
+                        <Button x:Name="QueueDownBtn" Content="下移" Style="{StaticResource TogglePillStyle}"
+                                Click="QueueDown_Click" Margin="0,0,8,0"/>
+                        <Button x:Name="QueueDeleteBtn" Content="删除选中" Style="{StaticResource TogglePillStyle}"
+                                Click="QueueDelete_Click"/>
+                        <Border Width="1" Height="18" Background="{StaticResource BorderCardBrush}"
+                                Margin="14,0" VerticalAlignment="Center"/>
+                        <CheckBox x:Name="QueueSelectAll" Content="全选" Style="{StaticResource CheckStyle}"
+                                  VerticalAlignment="Center" Click="QueueSelectAll_Click"/>
+                        <TextBlock x:Name="QueueEmptyHint" Text="（空）" FontSize="11"
+                                   Foreground="{StaticResource TextDimBrush}"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <CheckBox x:Name="QueueSelectModeBtn" Content="选择模式" Style="{StaticResource CheckStyle}"
+                                  VerticalAlignment="Center" Margin="14,0,0,0"
+                                  Checked="QueueSelectMode_Changed" Unchecked="QueueSelectMode_Changed"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 列表 -->
+                <ListBox x:Name="QueueList" Grid.Row="1" Margin="0,12,0,0" ScrollViewer.ScrollChanged="QueueScroll_Changed" SelectionMode="Extended" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="8" Background="Transparent"
+                                                Margin="2,0">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background"
+                                                        Value="{StaticResource AccentDimBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource QqRowCompactStyle}" Margin="6,0,6,6"
+                                    Click="QueueTrack_Click" Tag="{Binding}">
+                                <Grid Margin="10,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="14"/>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- 正在播放指示：左侧蓝色小条（不贴边） -->
+                                    <Border Grid.Column="0" Width="3" Height="18" CornerRadius="1.5"
+                                            Background="{StaticResource AccentBrush}"
+                                            VerticalAlignment="Center" HorizontalAlignment="Center"
+                                            Margin="0,0,5,0">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                    </Border>
+                                    <Border Grid.Column="1" Width="40" Height="40" CornerRadius="8"
+                                            Background="{StaticResource FillBrush}"
+                                            VerticalAlignment="Center">
+                                        <Grid>
+                                            <TextBlock Text="&#x266B;" FontFamily="Segoe UI Symbol" FontSize="15"
+                                                       Foreground="{StaticResource TextDimBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <Image Source="{Binding CoverUrl}" Width="40" Height="40"
+                                                   Stretch="UniformToFill" ImageFailed="QqCover_ImageFailed">
+                                                <Image.Clip>
+                                                    <RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/>
+                                                </Image.Clip>
+                                                <Image.Style>
+                                                    <Style TargetType="Image">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CoverUrl}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Image.Style>
+                                            </Image>
+                                        </Grid>
+                                    </Border>
+                                    <StackPanel Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding CacheState}" FontSize="10" Foreground="#E67E22"
+                                                       VerticalAlignment="Center" Margin="8,0,0,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CacheState}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Singer}" FontSize="11"
+                                                   Foreground="{StaticResource TextDimBrush}" Margin="0,3,0,0"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                HorizontalAlignment="Right">
+                                        <Path Width="16" Height="16" Cursor="Hand" Margin="0,0,0,3"
+                                              Data="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"
+                                              Stretch="Uniform" HorizontalAlignment="Right"
+                                              Tag="{Binding}" ToolTip="收藏 / 取消收藏"
+                                              PreviewMouseLeftButtonDown="QueueFav_PreviewDown"
+                                              MouseLeftButtonUp="QueueFav_MouseUp">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Fill" Value="Transparent"/>
+                                                    <Setter Property="Stroke" Value="#FFB9B9C0"/>
+                                                    <Setter Property="StrokeThickness" Value="1.6"/>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding QqMid}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsFav}" Value="True">
+                                                            <Setter Property="Fill" Value="#FFE0245E"/>
+                                                            <Setter Property="Stroke" Value="#FFE0245E"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
+                                        <Border Style="{StaticResource BadgeStyle}" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding Source}" Style="{StaticResource BadgeTextStyle}"/>
+                                        </Border>
+                                        <TextBlock Text="正在播放" FontSize="10"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   HorizontalAlignment="Right" Margin="0,3,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                    <Button x:Name="QueueJumpCurrentBtn" Grid.Row="1"
+                            Content="&#xE8A1;" ToolTip="返回当前播放歌曲"
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,14"
+                            Opacity="0" Visibility="Collapsed" Click="QueueJumpCurrent_Click">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Width" Value="38"/>
+                                <Setter Property="Height" Value="38"/>
+                                <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+                                <Setter Property="FontSize" Value="14"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Grid>
+                                                <Border x:Name="bd" CornerRadius="19" Background="{TemplateBinding Background}"/>
+                                                <Border x:Name="shade" CornerRadius="19" Background="#11000000" Opacity="0"/>
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="shade" Property="Opacity" Value="0.25"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="shade" Property="Opacity" Value="0.45"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+            </Grid>
+            <Grid x:Name="StreamPanel" Grid.Row="1" Visibility="Collapsed" Margin="20,14,20,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="UrlBox" Text="https://y.qq.com" Style="{StaticResource TextBoxStyle}"
+                             KeyDown="UrlBox_KeyDown"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                        <Button Content="打开" Style="{StaticResource TogglePillStyle}" Click="UrlOpen_Click"/>
+                        <Button Content="&#xE72C;" Style="{StaticResource IconButtonStyle}" Click="UrlBack_Click"
+                                ToolTip="后退"/>
+                        <Button Content="&#xE72A;" Style="{StaticResource IconButtonStyle}" Click="UrlForward_Click"
+                                ToolTip="前进"/>
+                        <Button Content="&#xE72C;" Style="{StaticResource IconButtonStyle}" Click="UrlRefresh_Click"
+                                ToolTip="刷新" RenderTransformOrigin="0.5,0.5">
+                            <Button.RenderTransform>
+                                <RotateTransform Angle="-90"/>
+                            </Button.RenderTransform>
+                        </Button>
+                        <ComboBox x:Name="QqQualityCombo" Width="120" Margin="8,0,0,0"
+                                  VerticalAlignment="Center" SelectedIndex="2"
+                                  SelectionChanged="QqQualityCombo_Changed">
+                            <ComboBoxItem Content="m4a 试听"/>
+                            <ComboBoxItem Content="MP3 128k"/>
+                            <ComboBoxItem Content="MP3 320k"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+                <Border Grid.Row="1" Margin="0,10,0,0" CornerRadius="12" Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" ClipToBounds="True">
+                    <wv2:WebView2 x:Name="Browser"/>
+                </Border>
+            </Grid>
+
+            <!-- ===================== QQ 音乐 view ===================== -->
+            <Grid x:Name="QqPanel" Grid.Row="1" Visibility="Collapsed" Margin="20,14,20,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 状态行 -->
+                <Border CornerRadius="12" Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="14,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="QqStatusDot" Width="10" Height="10"
+                                     Fill="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="QqStatusText" Margin="8,0,0,0" FontSize="13"
+                                       Foreground="{StaticResource TextSecondaryBrush}" Text="QQ 音乐组件未启动"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ComboBox x:Name="QqApiQualityCombo" Width="130" Margin="0,0,8,0"
+                                      VerticalAlignment="Center" Style="{StaticResource ComboStyle}" SelectedIndex="0"
+                                      SelectionChanged="QqQualityCombo_Changed">
+                                <ComboBoxItem Content="Hi-Res"/>
+                                <ComboBoxItem Content="无损"/>
+                                <ComboBoxItem Content="普通"/>
+                            </ComboBox>
+                            <Button x:Name="QqLoginBtn" Content="扫码登录" Style="{StaticResource TogglePillStyle}"
+                                    Click="QqLogin_Click"/>
+                            <Button x:Name="QqLogoutBtn" Content="退出登录" Style="{StaticResource TogglePillStyle}"
+                                    Click="QqLogout_Click" Visibility="Collapsed" Margin="8,0,0,0"/>
+                            <Button x:Name="QqRefreshBtn" Content="刷新" Style="{StaticResource TogglePillStyle}"
+                                    Click="QqRefresh_Click" Margin="8,0,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Tab 行 -->
+                <DockPanel Grid.Row="1" Margin="0,10,0,0">
+                    <Button x:Name="QqOnlineSearchBtn" DockPanel.Dock="Right" Content="&#xE721;"
+                            FontFamily="Segoe MDL2 Assets" FontSize="13" Style="{StaticResource TogglePillStyle}"
+                            Click="QqOnlineSearch_Click" ToolTip="在线搜索（单曲/专辑/歌手）" Margin="8,0,0,0"/>
+                    <Button x:Name="QqUrlBtn" DockPanel.Dock="Right" Content="&#xE71B;"
+                            FontFamily="Segoe MDL2 Assets" FontSize="13" Style="{StaticResource TogglePillStyle}"
+                            Click="QqUrl_Click" ToolTip="打开链接" Margin="8,0,0,0"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="QqBackBtn" Content="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                Style="{StaticResource TogglePillStyle}"
+                                Click="QqBackBtn_Click" ToolTip="返回"/>
+                        <Button x:Name="QqHomeBtn" Content="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                Style="{StaticResource TogglePillStyle}"
+                                Click="QqHome_Click" ToolTip="返回主页"/>
+                        <Button x:Name="QqBackToPlaylists" Content="← 返回歌单" Style="{StaticResource TogglePillStyle}"
+                                Click="QqBackToPlaylists_Click" Margin="8,0,0,0" Visibility="Collapsed"/>
+                        <TextBlock x:Name="QqListTitle" Margin="16,0,0,0" VerticalAlignment="Center" FontSize="13"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Text=""/>
+                        <TextBlock x:Name="QqListCountText" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource TextDimBrush}" Text=""/>
+                        <Button x:Name="RandomPlayBtn" Content="随机播放" Style="{StaticResource TogglePillStyle}"
+                                VerticalAlignment="Center" Margin="10,0,0,0" Visibility="Collapsed"
+                                Click="RandomPlay_Click"/>
+                        <ComboBox x:Name="QqSortCombo" Width="108" Margin="10,0,0,0"
+                                  Style="{StaticResource ComboStyle}" VerticalAlignment="Center"
+                                  SelectionChanged="QqSort_Changed">
+                            <ComboBoxItem Content="默认排序" Tag="default" IsSelected="True"/>
+                            <ComboBoxItem Content="歌名" Tag="title"/>
+                            <ComboBoxItem Content="歌手" Tag="singer"/>
+                            <ComboBoxItem Content="时长" Tag="duration"/>
+                            <ComboBoxItem Content="专辑" Tag="album"/>
+                        </ComboBox>
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- 内容区 -->
+                <Border Grid.Row="2" Margin="0,10,0,0" CornerRadius="12" Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" ClipToBounds="True">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 搜索行 -->
+                        <Grid x:Name="QqSearchRow" Visibility="Collapsed" Margin="12,12,12,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="QqSearchBox" Style="{StaticResource TextBoxStyle}"
+                                     KeyDown="QqSearchBox_KeyDown"/>
+                            <Button Grid.Column="1" Content="搜索" Style="{StaticResource TogglePillStyle}"
+                                    Click="QqSearchBtn_Click" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <!-- 歌单列表 -->
+                        <!-- 主页推荐卡片 -->
+                        <ScrollViewer x:Name="QqHomeScroller" Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto" Margin="12,12,12,0">
+                            <ItemsControl x:Name="QqHomeList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,10"
+                                                Click="QqHomeCard_Click" Tag="{Binding}">
+                                            <Grid Margin="14,12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="46"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="42" Height="42" CornerRadius="10"
+                                                        Background="{StaticResource AccentDimBrush}">
+                                                    <TextBlock Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="18" Foreground="{StaticResource AccentBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <TextBlock Text="{Binding Sub}" FontSize="11"
+                                                               Foreground="{StaticResource TextDimBrush}" Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <ScrollViewer x:Name="QqPlaylistScroller" Grid.Row="1" Visibility="Collapsed"
+                                      VerticalScrollBarVisibility="Auto" Margin="12,12,12,0">
+                            <ItemsControl x:Name="QqPlaylistList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,6"
+                                                Click="QqPlaylist_Click" Tag="{Binding}">
+                                            <Grid Margin="12,9">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="46"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="40" Height="40" CornerRadius="8"
+                                                        Background="{StaticResource FillBrush}"
+                                                        VerticalAlignment="Center">
+                                                    <Grid>
+                                                        <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets"
+                                                                   FontSize="15"
+                                                                   Foreground="{StaticResource TextDimBrush}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                        <Image Source="{Binding CoverUrl}" Width="40" Height="40"
+                                                               Stretch="UniformToFill"
+                                                               ImageFailed="QqCover_ImageFailed">
+                                                            <Image.Clip>
+                                                                <RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/>
+                                                            </Image.Clip>
+                                                            <Image.Style>
+                                                                <Style TargetType="Image">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding CoverUrl}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Image.Style>
+                                                        </Image>
+                                                    </Grid>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13.5"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <TextBlock Text="{Binding Info}" FontSize="12"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="&#xE76C;" FontSize="13"
+                                                           Foreground="{StaticResource TextDimBrush}"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- 专辑列表（收藏的专辑 / 歌手专辑） -->
+                        <ScrollViewer x:Name="QqAlbumScroller" Grid.Row="1" Visibility="Collapsed"
+                                      VerticalScrollBarVisibility="Auto" Margin="12,12,12,0">
+                            <ItemsControl x:Name="QqAlbumList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,6"
+                                                Click="QqAlbum_Click" Tag="{Binding}">
+                                            <Grid Margin="12,9">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" FontSize="13.5"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                        <TextBlock Text="{Binding Singer}" FontSize="12"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                        <TextBlock Text="{Binding Date}" FontSize="12"
+                                                                   Foreground="{StaticResource TextDimBrush}"
+                                                                   Margin="10,0,0,0"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                            VerticalAlignment="Center">
+                                                    <Path Width="18" Height="18" Cursor="Hand" Margin="0,0,10,0"
+                                                          Data="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"
+                                                          Stretch="Uniform" Tag="{Binding}"
+                                                          ToolTip="收藏 / 取消收藏专辑"
+                                                          PreviewMouseLeftButtonDown="QqAlbumFav_PreviewDown"
+                                                          MouseLeftButtonUp="QqAlbumFav_MouseUp">
+                                                        <Path.Style>
+                                                            <Style TargetType="Path">
+                                                                <Setter Property="Fill" Value="Transparent"/>
+                                                                <Setter Property="Stroke" Value="#FFB9B9C0"/>
+                                                                <Setter Property="StrokeThickness" Value="1.6"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsFav}" Value="True">
+                                                                        <Setter Property="Fill" Value="#FFE0245E"/>
+                                                                        <Setter Property="Stroke" Value="#FFE0245E"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Path.Style>
+                                                    </Path>
+                                                    <TextBlock Text="&#xE76C;" FontSize="13"
+                                                               Foreground="{StaticResource TextDimBrush}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- 歌手页（主窗口视图：头像 + 介绍 + 歌曲/专辑） -->
+                        <Grid x:Name="QqSingerView" Grid.Row="1" Visibility="Collapsed" Margin="12,12,12,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="QqSingerBackBtn" Content="‹ 返回"
+                                        Style="{StaticResource TogglePillStyle}" Click="QqSingerBack_Click"
+                                        VerticalAlignment="Top"/>
+                                <Border Width="64" Height="64" CornerRadius="32" Margin="14,0,0,0"
+                                        Background="{StaticResource FillBrush}">
+                                    <Grid>
+                                        <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="22"
+                                                   Foreground="{StaticResource TextDimBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Image x:Name="QqSingerAvatar" Width="64" Height="64" Stretch="UniformToFill"
+                                               ImageFailed="QqAvatar_ImageFailed">
+                                            <Image.Clip>
+                                                <EllipseGeometry RadiusX="32" RadiusY="32" Center="32,32"/>
+                                            </Image.Clip>
+                                        </Image>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="QqSingerName" FontSize="17" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <ScrollViewer MaxWidth="560" MaxHeight="56" Margin="0,5,0,0"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <ScrollViewer.Resources>
+                                            <Style TargetType="ScrollBar" BasedOn="{StaticResource SlimScrollBarStyle}"/>
+                                        </ScrollViewer.Resources>
+                                        <TextBlock x:Name="QqSingerDescText" FontSize="11.5" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,14,0,0">
+                                <Button x:Name="QqSingerTabSongs" Content="歌曲"
+                                        Style="{StaticResource TogglePillStyle}" Tag="songs"
+                                        Click="QqSingerTab_Click"/>
+                                <Button x:Name="QqSingerTabAlbums" Content="专辑"
+                                        Style="{StaticResource TogglePillStyle}" Tag="albums"
+                                        Click="QqSingerTab_Click" Margin="8,0,0,0"/>
+                            </StackPanel>
+                            <Grid Grid.Row="2" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="34" Height="28" CornerRadius="6,0,0,6"
+                                        Background="{StaticResource FillBrush}"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                               Foreground="{StaticResource TextDimBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBox x:Name="QqSingerFilterBox" Grid.Column="1"
+                                         Style="{StaticResource TextBoxStyle}"
+                                         TextChanged="QqSingerFilter_Changed"
+                                         ToolTip="在歌手歌曲/专辑中搜索（本地过滤）"/>
+                            </Grid>
+                            <ScrollViewer Grid.Row="3" Margin="0,10,0,0"
+                                          VerticalScrollBarVisibility="Auto"
+                                          ScrollChanged="QqSingerScroller_ScrollChanged">
+                                <StackPanel>
+                                    <ItemsControl x:Name="QqSingerSongList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,4"
+                                                        Click="QqSingerSong_Click" Tag="{Binding}">
+                                                    <Grid Margin="10,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="42"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Width="36" Height="36" CornerRadius="6"
+                                                                Background="{StaticResource FillBrush}"
+                                                                VerticalAlignment="Center">
+                                                            <Grid>
+                                                                <TextBlock Text="&#x266B;" FontFamily="Segoe UI Symbol"
+                                                                           FontSize="13"
+                                                                           Foreground="{StaticResource TextDimBrush}"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"/>
+                                                                <Image Source="{Binding CoverUrl}" Width="36" Height="36"
+                                                                       Stretch="UniformToFill"
+                                                                       ImageFailed="QqCover_ImageFailed">
+                                                                    <Image.Clip>
+                                                                        <RectangleGeometry Rect="0,0,36,36" RadiusX="6" RadiusY="6"/>
+                                                                    </Image.Clip>
+                                                                    <Image.Style>
+                                                                        <Style TargetType="Image">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding CoverUrl}" Value="">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Image.Style>
+                                                                </Image>
+                                                            </Grid>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                                            <TextBlock Text="{Binding Title}" FontSize="13"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                            <TextBlock Text="{Binding Album}" FontSize="11"
+                                                                       Foreground="{StaticResource TextDimBrush}"
+                                                                       Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="2" Text="{Binding Duration}"
+                                                                   FontSize="11"
+                                                                   Foreground="{StaticResource TextDimBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <ItemsControl x:Name="QqSingerAlbumList" Visibility="Collapsed">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,4"
+                                                        Click="QqSingerAlbum_Click" Tag="{Binding}">
+                                                    <Grid Margin="10,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="42"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Width="36" Height="36" CornerRadius="6"
+                                                                Background="{StaticResource FillBrush}"
+                                                                VerticalAlignment="Center">
+                                                            <Grid>
+                                                                <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets"
+                                                                           FontSize="13"
+                                                                           Foreground="{StaticResource TextDimBrush}"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"/>
+                                                                <Image Source="{Binding CoverUrl}" Width="36" Height="36"
+                                                                       Stretch="UniformToFill"
+                                                                       ImageFailed="QqCover_ImageFailed">
+                                                                    <Image.Clip>
+                                                                        <RectangleGeometry Rect="0,0,36,36" RadiusX="6" RadiusY="6"/>
+                                                                    </Image.Clip>
+                                                                    <Image.Style>
+                                                                        <Style TargetType="Image">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding CoverUrl}" Value="">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Image.Style>
+                                                                </Image>
+                                                            </Grid>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                                            <TextBlock Text="{Binding Name}" FontSize="13"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                            <TextBlock Text="{Binding Date}" FontSize="11"
+                                                                       Foreground="{StaticResource TextDimBrush}"
+                                                                       Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                                    VerticalAlignment="Center">
+                                                            <Path Width="18" Height="18" Cursor="Hand" Margin="0,0,10,0"
+                                                                  Data="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"
+                                                                  Stretch="Uniform" Tag="{Binding}"
+                                                                  ToolTip="收藏 / 取消收藏专辑"
+                                                                  PreviewMouseLeftButtonDown="QqAlbumFav_PreviewDown"
+                                                                  MouseLeftButtonUp="QqAlbumFav_MouseUp">
+                                                                <Path.Style>
+                                                                    <Style TargetType="Path">
+                                                                        <Setter Property="Fill" Value="Transparent"/>
+                                                                        <Setter Property="Stroke" Value="#FFB9B9C0"/>
+                                                                        <Setter Property="StrokeThickness" Value="1.6"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsFav}" Value="True">
+                                                                                <Setter Property="Fill" Value="#FFE0245E"/>
+                                                                                <Setter Property="Stroke" Value="#FFE0245E"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Path.Style>
+                                                            </Path>
+                                                            <TextBlock Text="&#xE76C;" FontSize="12"
+                                                                       Foreground="{StaticResource TextDimBrush}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- 歌曲列表 -->
+                        <ScrollViewer x:Name="QqSongScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                      ScrollChanged="QqSongScroller_ScrollChanged">
+                            <StackPanel Margin="12,12,12,0">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="28" CornerRadius="6,0,0,6"
+                                            Background="{StaticResource FillBrush}"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                   Foreground="{StaticResource TextDimBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBox x:Name="QqFilterBox" Grid.Column="1" Margin="0,0,0,0"
+                                             Style="{StaticResource TextBoxStyle}"
+                                             TextChanged="QqFilter_Changed"
+                                             ToolTip="在当前列表中搜索（标题/歌手）"/>
+                                </Grid>
+                                <ItemsControl x:Name="QqSongList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,6"
+                                                    Click="QqSong_Click" Tag="{Binding}">
+                                                <Grid Margin="12,9">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="52"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Width="44" Height="44" CornerRadius="8"
+                                                            Background="{StaticResource FillBrush}"
+                                                            VerticalAlignment="Center">
+                                                        <Grid>
+                                                            <TextBlock Text="&#x266B;" FontFamily="Segoe UI Symbol"
+                                                                       FontSize="16"
+                                                                       Foreground="{StaticResource TextDimBrush}"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"/>
+                                                            <Image Source="{Binding CoverUrl}" Width="44" Height="44"
+                                                                   Stretch="UniformToFill"
+                                                                   ImageFailed="QqCover_ImageFailed">
+                                                                <Image.Clip>
+                                                                    <RectangleGeometry Rect="0,0,44,44" RadiusX="8" RadiusY="8"/>
+                                                                </Image.Clip>
+                                                                <Image.Style>
+                                                                    <Style TargetType="Image">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding CoverUrl}" Value="">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Image.Style>
+                                                            </Image>
+                                                        </Grid>
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                                        <TextBlock Text="{Binding Title}" FontSize="13.5"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                            <TextBlock Text="{Binding Singer}" FontSize="12"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                            <TextBlock Text="{Binding Album}" FontSize="12"
+                                                                       Foreground="{StaticResource TextDimBrush}"
+                                                                       Margin="8,0,0,0"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Duration}"
+                                                               FontSize="12"
+                                                               Foreground="{StaticResource TextDimBrush}"
+                                                               VerticalAlignment="Center"/>
+                                                    <Path Grid.Column="3" Margin="10,0,0,0" Cursor="Hand"
+                                                          Data="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"
+                                                          Width="18" Height="18" Stretch="Uniform"
+                                                          Tag="{Binding}" ToolTip="收藏 / 取消收藏"
+                                                          VerticalAlignment="Center"
+                                                          PreviewMouseLeftButtonDown="QqSongFav_PreviewDown"
+                                                          MouseLeftButtonUp="QqSongFav_MouseUp">
+                                                        <Path.Style>
+                                                            <Style TargetType="Path">
+                                                                <Setter Property="Fill" Value="Transparent"/>
+                                                                <Setter Property="Stroke" Value="#FFB9B9C0"/>
+                                                                <Setter Property="StrokeThickness" Value="1.6"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsFav}" Value="True">
+                                                                        <Setter Property="Fill" Value="#FFE0245E"/>
+                                                                        <Setter Property="Stroke" Value="#FFE0245E"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Path.Style>
+                                                    </Path>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="QqEmptyHint" Text="暂无内容，登录后即可查看收藏与歌单"
+                                           FontSize="13" Foreground="{StaticResource TextDimBrush}"
+                                           HorizontalAlignment="Center" Margin="0,40,0,0" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                    </Grid>
+                </Border>
+
+                <!-- QR 登录覆盖层 -->
+                        <!-- URL 打开弹窗 -->
+                        <Border x:Name="QqUrlOverlay" Grid.Row="0" Grid.RowSpan="3" CornerRadius="12"
+                                Background="#F2FFFFFF" Visibility="Collapsed">
+                            <Border Width="430" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Background="{StaticResource BgCardBrush}" CornerRadius="14"
+                                    BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="18">
+                                <StackPanel>
+                                    <TextBlock Text="打开链接" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="支持 QQ 音乐歌单 / 歌曲 / 专辑链接" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="QqUrlBox" Style="{StaticResource TextBoxStyle}"
+                                                 KeyDown="QqUrlBox_KeyDown"/>
+                                        <Button Grid.Column="1" Content="&#xE72A;" FontFamily="Segoe MDL2 Assets"
+                                                FontSize="13" Style="{StaticResource TogglePillStyle}"
+                                                Click="QqUrlGo_Click" Margin="8,0,0,0" ToolTip="打开"/>
+                                    </Grid>
+                                    <Button Content="关闭" Style="{StaticResource TogglePillStyle}"
+                                            Click="QqUrlClose_Click" HorizontalAlignment="Right" Margin="0,14,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Border>
+
+                        <!-- 在线搜索弹窗（单曲/专辑/歌手） -->
+                        <Border x:Name="QqSearchOverlay" Grid.Row="0" Grid.RowSpan="3" CornerRadius="12"
+                                Background="#F2FFFFFF" Visibility="Collapsed">
+                            <Border Width="640" MaxHeight="600" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Background="{StaticResource BgCardBrush}" CornerRadius="14"
+                                    BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="18">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Text="在线搜索" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <Button Content="关闭" Style="{StaticResource TogglePillStyle}"
+                                                Click="QqSearchClose_Click" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="QqOnlineSearchBox" Style="{StaticResource TextBoxStyle}"
+                                                 KeyDown="QqOnlineSearchBox_KeyDown"/>
+                                        <Button Grid.Column="1" Content="搜索" Style="{StaticResource TogglePillStyle}"
+                                                Click="QqOnlineSearchGo_Click" Margin="8,0,0,0"/>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <Button x:Name="QqSearchTabSong" Content="单曲"
+                                                Style="{StaticResource TogglePillStyle}" Tag="song"
+                                                Click="QqSearchTab_Click"/>
+                                        <Button x:Name="QqSearchTabAlbum" Content="专辑"
+                                                Style="{StaticResource TogglePillStyle}" Tag="album"
+                                                Click="QqSearchTab_Click" Margin="8,0,0,0"/>
+                                        <Button x:Name="QqSearchTabSinger" Content="歌手"
+                                                Style="{StaticResource TogglePillStyle}" Tag="singer"
+                                                Click="QqSearchTab_Click" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <ScrollViewer MaxHeight="400" Margin="0,12,0,0"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <StackPanel>
+                                        <ItemsControl x:Name="QqSearchSongList">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,4"
+                                                            Click="QqSearchSong_Click" Tag="{Binding}">
+                                                        <Grid Margin="10,7">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Title}" FontSize="13"
+                                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                                <TextBlock Text="{Binding Singer}" FontSize="11"
+                                                                           Foreground="{StaticResource TextDimBrush}"
+                                                                           Margin="0,2,0,0"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Duration}"
+                                                                       FontSize="11"
+                                                                       Foreground="{StaticResource TextDimBrush}"
+                                                                       VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <ItemsControl x:Name="QqSearchAlbumList" Visibility="Collapsed">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,4"
+                                                            Click="QqSearchAlbum_Click" Tag="{Binding}">
+                                                        <Grid Margin="10,7">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="42"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Width="36" Height="36" CornerRadius="6"
+                                                                    Background="{StaticResource FillBrush}"
+                                                                    VerticalAlignment="Center">
+                                                                <Grid>
+                                                                    <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets"
+                                                                               FontSize="13"
+                                                                               Foreground="{StaticResource TextDimBrush}"
+                                                                               HorizontalAlignment="Center"
+                                                                               VerticalAlignment="Center"/>
+                                                                    <Image Source="{Binding CoverUrl}" Width="36" Height="36"
+                                                                           Stretch="UniformToFill"
+                                                                           ImageFailed="QqCover_ImageFailed">
+                                                                        <Image.Clip>
+                                                                            <RectangleGeometry Rect="0,0,36,36" RadiusX="6" RadiusY="6"/>
+                                                                        </Image.Clip>
+                                                                        <Image.Style>
+                                                                            <Style TargetType="Image">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding CoverUrl}" Value="">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Image.Style>
+                                                                    </Image>
+                                                                </Grid>
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                                                <TextBlock Text="{Binding Name}" FontSize="13"
+                                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                                    <TextBlock Text="{Binding Singer}" FontSize="11"
+                                                                               Foreground="{StaticResource TextDimBrush}"/>
+                                                                    <TextBlock Text="{Binding Date}" FontSize="11"
+                                                                               Foreground="{StaticResource TextDimBrush}"
+                                                                               Margin="8,0,0,0"/>
+                                                                    </StackPanel>
+                                                                </StackPanel>
+                                                            <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                                        VerticalAlignment="Center">
+                                                                <Path Width="18" Height="18" Cursor="Hand" Margin="0,0,10,0"
+                                                                      Data="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"
+                                                                      Stretch="Uniform" Tag="{Binding}"
+                                                                      ToolTip="收藏 / 取消收藏专辑"
+                                                                      PreviewMouseLeftButtonDown="QqAlbumFav_PreviewDown"
+                                                                      MouseLeftButtonUp="QqAlbumFav_MouseUp">
+                                                                    <Path.Style>
+                                                                        <Style TargetType="Path">
+                                                                            <Setter Property="Fill" Value="Transparent"/>
+                                                                            <Setter Property="Stroke" Value="#FFB9B9C0"/>
+                                                                            <Setter Property="StrokeThickness" Value="1.6"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsFav}" Value="True">
+                                                                                    <Setter Property="Fill" Value="#FFE0245E"/>
+                                                                                    <Setter Property="Stroke" Value="#FFE0245E"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Path.Style>
+                                                                </Path>
+                                                                <TextBlock Text="&#xE76C;" FontSize="12"
+                                                                           Foreground="{StaticResource TextDimBrush}"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <ItemsControl x:Name="QqSearchSingerList" Visibility="Collapsed">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Style="{StaticResource QqRowButtonStyle}" Margin="0,0,0,4"
+                                                            Click="QqSearchSinger_Click" Tag="{Binding}">
+                                                        <Grid Margin="10,7">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="42"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Width="36" Height="36" CornerRadius="18"
+                                                                    Background="{StaticResource FillBrush}"
+                                                                    VerticalAlignment="Center">
+                                                                <Grid>
+                                                                    <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets"
+                                                                               FontSize="14"
+                                                                               Foreground="{StaticResource TextDimBrush}"
+                                                                               HorizontalAlignment="Center"
+                                                                               VerticalAlignment="Center"/>
+                                                                    <Image Source="{Binding Pic}" Width="36" Height="36"
+                                                                           Stretch="UniformToFill"
+                                                                           ImageFailed="QqCover_ImageFailed">
+                                                                        <Image.Clip>
+                                                                            <EllipseGeometry RadiusX="18" RadiusY="18"
+                                                                                             Center="18,18"/>
+                                                                        </Image.Clip>
+                                                                        <Image.Style>
+                                                                            <Style TargetType="Image">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding Pic}" Value="">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Image.Style>
+                                                                    </Image>
+                                                                </Grid>
+                                                            </Border>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="2" FontSize="11"
+                                                                       Foreground="{StaticResource TextDimBrush}"
+                                                                       VerticalAlignment="Center">
+                                                                <Run Text="{Binding SongNum, StringFormat={}{0} 首}"/>
+                                                                <Run Text=" · "/>
+                                                                <Run Text="{Binding AlbumNum, StringFormat={}{0} 张专辑}"/>
+                                                            </TextBlock>
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Border>
+                        </Border>
+
+                <Border x:Name="QrOverlay" Grid.Row="0" Grid.RowSpan="3" CornerRadius="12"
+                        Background="#F2FFFFFF" Visibility="Collapsed">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock x:Name="QrTitleText" Text="QQ 扫码登录" FontSize="15" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+                            <RadioButton x:Name="QrTypeQQ" Content="QQ 登录" GroupName="QrType" IsChecked="True"
+                                          Checked="QrType_Changed" Style="{StaticResource RadioStyle}"/>
+                            <RadioButton x:Name="QrTypeWx" Content="微信登录" GroupName="QrType"
+                                          Checked="QrType_Changed" Style="{StaticResource RadioStyle}" Margin="16,0,0,0"/>
+                        </StackPanel>
+                        <Border Width="220" Height="220" Margin="0,14,0,0" CornerRadius="10" Background="White"
+                                BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1">
+                            <Image x:Name="QrImage" Stretch="Uniform" Margin="10"/>
+                        </Border>
+                        <TextBlock x:Name="QrStatusText" Text="等待扫码…" FontSize="13" Margin="0,12,0,0"
+                                   HorizontalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <Button Content="取消" Style="{StaticResource TogglePillStyle}" Click="QrCancel_Click"
+                                Margin="0,14,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ===================== Settings view ===================== -->
+            <ScrollViewer x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto" Padding="20,16,20,20">
+                <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+                    <!-- Resume last song -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="启动恢复" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="启动软件时是否恢复上一次播放的歌曲（可包含进度）。"
+                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <StackPanel Margin="0,12,0,0">
+                                <RadioButton x:Name="ResumeOff" Content="不恢复"
+                                             Checked="ResumeMode_Changed" Style="{StaticResource RadioStyle}"/>
+                                <RadioButton x:Name="ResumeSong" Content="仅恢复歌曲（从头播放）"
+                                             Checked="ResumeMode_Changed" Style="{StaticResource RadioStyle}"/>
+                                <RadioButton x:Name="ResumeFull" Content="恢复歌曲和进度"
+                                             IsChecked="True" Checked="ResumeMode_Changed" Style="{StaticResource RadioStyle}"/>
+                            </StackPanel>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="歌词偏移" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBox x:Name="LyricOffsetBox" Grid.Column="1" Text="400"
+                                         TextChanged="LyricOffset_Changed" Style="{StaticResource TextBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="毫秒（正=延后，负=提前）" FontSize="10.5"
+                                           Foreground="{StaticResource TextDimBrush}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                            <CheckBox x:Name="AutoStartCheck" Content="开机自动启动" Margin="0,14,0,0"
+                                      Style="{StaticResource CheckStyle}" Checked="AutoStart_Changed"
+                                      Unchecked="AutoStart_Changed"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- Buffer -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="缓冲区" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="下一首与最近播放歌曲的总大小上限，超出上限自动删除最早的一首。"
+                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <WrapPanel Margin="0,14,0,0">
+                                <RadioButton x:Name="Buf256" Content="256 MB" Checked="BufferOption_Changed" Style="{StaticResource RadioStyle}"/>
+                                <RadioButton x:Name="Buf512" Content="512 MB" IsChecked="True" Checked="BufferOption_Changed" Style="{StaticResource RadioStyle}"/>
+                                <RadioButton x:Name="Buf1G" Content="1 GB" Checked="BufferOption_Changed" Style="{StaticResource RadioStyle}"/>
+                                <RadioButton x:Name="BufCustom" Content="自定义" Checked="BufferOption_Changed" Style="{StaticResource RadioStyle}"/>
+                                <TextBox x:Name="BufCustomValue" Width="90" TextChanged="BufCustom_Changed"
+                                         Style="{StaticResource TextBoxStyle}" Margin="8,0,0,0"/>
+                                <TextBlock Text="MB" FontSize="11" Foreground="{StaticResource TextDimBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <RadioButton x:Name="BufCount" Content="按曲数" Checked="BufferOption_Changed" Style="{StaticResource RadioStyle}" Margin="16,0,0,0"/>
+                                <TextBox x:Name="BufCountValue" Width="60" TextChanged="BufCount_Changed"
+                                         Style="{StaticResource TextBoxStyle}" Margin="8,0,0,0"/>
+                                <TextBlock Text="首" FontSize="11" Foreground="{StaticResource TextDimBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
+                            </WrapPanel>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="缓存路径" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBox x:Name="CachePathBox" Grid.Column="1"
+                                         TextChanged="CachePath_Changed" Style="{StaticResource TextBoxStyle}"/>
+                                <Button Grid.Column="2" Content="浏览…" Style="{StaticResource TogglePillStyle}"
+                                        Click="CachePathBrowse_Click" Margin="8,0,0,0"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- HQPlayer -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="HQPlayer 连接" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <Button x:Name="HqToggle" Grid.Column="1" Content="升频：开"
+                                        Style="{StaticResource TogglePillStyle}" Click="HqToggle_Click"/>
+                            </Grid>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="地址" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBox x:Name="HqAddressBox" Grid.Column="1" Text="127.0.0.1"
+                                         TextChanged="HqFields_Changed" Style="{StaticResource TextBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="端口" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="14,0,8,0"/>
+                                <TextBox x:Name="HqPortBox" Grid.Column="3" Text="4321"
+                                         TextChanged="HqFields_Changed" Style="{StaticResource TextBoxStyle}"/>
+                            </Grid>
+                            <CheckBox x:Name="HqAutoStartCheck" Content="启动软件时自动启动 HQPlayer" FontSize="11"
+                                      Foreground="{StaticResource TextSecondaryBrush}" Margin="0,12,0,0"
+                                      Style="{StaticResource CheckStyle}" Checked="HqAutoStart_Changed"
+                                      Unchecked="HqAutoStart_Changed"/>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="HQPlayer 路径" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBox x:Name="HqExePathBox" Grid.Column="1"
+                                         TextChanged="HqExePath_Changed" Style="{StaticResource TextBoxStyle}"/>
+                                <Button Grid.Column="2" Content="自动定位" Margin="8,0,0,0"
+                                        Style="{StaticResource TogglePillStyle}" Click="HqLocate_Click"/>
+                                <Button Grid.Column="3" Content="浏览…" Margin="8,0,0,0"
+                                        Style="{StaticResource TogglePillStyle}" Click="HqExeBrowse_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- System info -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="系统信息" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="在侧栏底部显示本机资源占用（应用自身）。"
+                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <StackPanel Margin="0,12,0,0">
+                                <CheckBox x:Name="ShowMemCheck" Content="显示内存占用"
+                                          Style="{StaticResource CheckStyle}" Checked="StatsCheck_Changed"
+                                          Unchecked="StatsCheck_Changed"/>
+                                <CheckBox x:Name="ShowCpuCheck" Content="显示 CPU 占用"
+                                          Style="{StaticResource CheckStyle}" Checked="StatsCheck_Changed"
+                                          Unchecked="StatsCheck_Changed"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 局域网遥控 -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="局域网遥控" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <CheckBox x:Name="RemoteCtrlCheck" Grid.Column="1" Content="启用"
+                                          Style="{StaticResource CheckStyle}" Checked="RemoteCtrl_Changed"
+                                          Unchecked="RemoteCtrl_Changed"/>
+                            </Grid>
+                            <TextBlock Margin="0,6,0,0" FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                       Text="开启后手机连接同一 WiFi，访问下方地址即可遥控（播放/切歌/进度/歌词/队列）。"/>
+                            <TextBlock x:Name="RemoteCtrlAddress" Margin="0,10,0,0" FontSize="13"
+                                       Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"
+                                       Text="未开启" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ===================== Now playing ===================== -->
+            <!-- 全局「返回当前播放歌曲」按钮：首页/歌单列表/设置等任意视图下可用 -->
+            <Button x:Name="GlobalJumpBtn" Grid.Row="1"
+                    Content="&#xE8A1;" ToolTip="返回当前播放歌曲"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,14"
+                    Opacity="0" Visibility="Collapsed" Click="GlobalJumpCurrent_Click">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                        <Setter Property="Foreground" Value="White"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Width" Value="38"/>
+                        <Setter Property="Height" Value="38"/>
+                        <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+                        <Setter Property="FontSize" Value="14"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Grid>
+                                        <Border x:Name="bd" CornerRadius="19" Background="{TemplateBinding Background}"/>
+                                        <Border x:Name="shade" CornerRadius="19" Background="#11000000" Opacity="0"/>
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="shade" Property="Opacity" Value="0.25"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="shade" Property="Opacity" Value="0.45"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Border Grid.Row="2" Background="{StaticResource BgSidebarBrush}"
+                    BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="0,1,0,0"
+                    Padding="20,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="340"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Track info -->
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="CoverBtn" Style="{StaticResource CoverButtonStyle}"
+                                Click="OpenNowPlaying_Click" ToolTip="展开正在播放">
+                            <Grid>
+                                <TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="17"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="CoverImage" Stretch="UniformToFill" Visibility="Collapsed"/>
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="BottomTitleText" Text="未在播放" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock x:Name="BottomSingerText" Text="" FontSize="10.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
+                            <TextBlock x:Name="BottomSourceText" Text="" FontSize="9"
+                                       Foreground="{StaticResource TextDimBrush}" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Controls + progress -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="24,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button x:Name="PrevBtn" Style="{StaticResource IconButtonStyle}" Content="&#xE892;"
+                                    Click="Prev_Click"/>
+                            <Button x:Name="PlayBtn" Style="{StaticResource PlayButtonStyle}" Content="&#xE769;"
+                                    Click="Play_Click" Margin="14,0"/>
+                            <Button x:Name="NextBtn" Style="{StaticResource IconButtonStyle}" Content="&#xE893;"
+                                    Click="Next_Click"/>
+                        </StackPanel>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="BottomPosText" Text="0:00" FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                                       VerticalAlignment="Center"/>
+                            <Grid Grid.Column="1" Height="16" VerticalAlignment="Center" Margin="10,0">
+                                <Border x:Name="BottomProgressTrack" Height="3" CornerRadius="1.5"
+                                        Background="{StaticResource BorderCardBrush}" VerticalAlignment="Center">
+                                    <Border x:Name="BottomProgressFill" Width="96" Height="3" CornerRadius="1.5"
+                                            HorizontalAlignment="Left"
+                                            Background="{StaticResource AccentBrush}"/>
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="BottomDurText" Grid.Column="2" Text="0:00" FontSize="10"
+                                       Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- 状态日志 + HQ（日志宽度自适应，NAA 芯片仅在 NAA 输出时显示） -->
+                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="StatusText" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,14,0" Text="就绪"
+                                   TextAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                        <Border Grid.Column="1" Style="{StaticResource ChipStyle}" Visibility="Collapsed">
+                            <TextBlock x:Name="NaaStatusText" Text="NAA · 未连接" Style="{StaticResource ChipTextStyle}"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===================== Now Playing overlay ===================== -->
+        <Grid x:Name="NowPlayingOverlay" Grid.ColumnSpan="2" Background="{StaticResource BgWindowBrush}"
+              Visibility="Collapsed">
+            <Grid.RenderTransform>
+                <TranslateTransform/>
+            </Grid.RenderTransform>
+            <Grid Margin="48,28,48,28">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Content="&#xE70D;" Style="{StaticResource IconButtonStyle}"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Click="CloseNowPlaying_Click" ToolTip="收起"/>
+<Button x:Name="FullScreenBtn" Content="&#xE740;" Style="{StaticResource IconButtonStyle}"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Click="FullScreen_Click" ToolTip="全屏"/>
+
+                <!-- 左：封面 + 进度 + 控制 -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Grid Width="300" Height="300">
+                        <Border CornerRadius="20" Background="#40000000" Margin="0,10,0,0">
+                            <Border.Effect>
+                                <BlurEffect Radius="12"/>
+                            </Border.Effect>
+                        </Border>
+                        <Border CornerRadius="20" Background="{StaticResource CoverBrush}">
+                            <Grid>
+                                <TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="90"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="OverlayCoverImage" Stretch="UniformToFill" Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                    <TextBlock x:Name="OverlayTitleText" Text="未在播放" FontSize="22" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               HorizontalAlignment="Center" Margin="0,24,0,0"/>
+                    <TextBlock x:Name="OverlaySingerText" Text="" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    <TextBlock x:Name="OverlaySourceText" Text="" FontSize="11"
+                               Foreground="{StaticResource TextDimBrush}"
+                               HorizontalAlignment="Center" Margin="0,2,0,0"/>
+
+                    <Grid Width="360" Margin="0,28,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="OverlayPosText" Text="0:00" FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Grid Grid.Column="1" Height="16" VerticalAlignment="Center" Margin="10,0">
+                            <Border x:Name="OverlayProgressTrack" Height="4" CornerRadius="2"
+                                    Background="{StaticResource BorderCardBrush}" VerticalAlignment="Center">
+                                <Border x:Name="OverlayProgressFill" Width="150" Height="4" CornerRadius="2"
+                                        HorizontalAlignment="Left" Background="{StaticResource AccentBrush}"/>
+                            </Border>
+                        </Grid>
+                        <TextBlock x:Name="OverlayDurText" Grid.Column="2" Text="0:00" FontSize="10"
+                                   Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
+                        <Button x:Name="OverlayPrevBtn" Style="{StaticResource IconButtonStyle}" Content="&#xE892;" Click="Prev_Click"/>
+                        <Button x:Name="OverlayPlayBtn" Style="{StaticResource PlayButtonStyle}" Content="&#xE769;"
+                                Margin="18,0" Click="OverlayPlay_Click"/>
+                        <Button x:Name="OverlayNextBtn" Style="{StaticResource IconButtonStyle}" Content="&#xE893;" Click="Next_Click"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 右：歌词（全部靠左贴边） -->
+                <Grid Grid.Column="1" Margin="48,0,0,0">
+                    <ScrollViewer x:Name="LyricScroller" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                        <Grid MinHeight="{Binding ActualHeight, ElementName=LyricScroller}">
+                            <StackPanel x:Name="LyricList" Margin="0,8,0,8" VerticalAlignment="Center">
+                            <TextBlock Text="[Verse 1]" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                       HorizontalAlignment="Left"/>
+                            <TextBlock Text="Fever dream high in the quiet of the night" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="在安静的夜里，做着发烧般的梦" FontSize="15"
+                                       Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Left"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="You know that I caught it" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="你知道我已深陷其中" FontSize="15"
+                                       Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Left"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="Bad, bad boy, shiny toy with a price" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="坏坏的男孩，带着价格的光鲜玩具" FontSize="15"
+                                       Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Left"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="[Chorus]" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                       HorizontalAlignment="Left" Margin="0,24,0,0"/>
+                            <TextBlock Text="&#x2019;Cause it&#x2019;s a cruel summer" FontSize="17" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="因为这是一个残酷的夏天" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="It&#x2019;s cool, that&#x2019;s what I tell &#x2019;em" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="这很酷，我这样告诉他们" FontSize="15"
+                                       Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Left"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="No rules in breakable heaven" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="在这易碎的天堂里没有规则" FontSize="15"
+                                       Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Left"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="But, ooh, whoa, oh" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="It&#x2019;s a cruel summer" FontSize="15"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Left"
+                                       Margin="0,14,0,0"/>
+                                                    </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+                    <Border IsHitTestVisible="False" VerticalAlignment="Top" Height="64">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#FFF7F7F8" Offset="0"/>
+                                <GradientStop Color="#00F7F7F8" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <Border IsHitTestVisible="False" VerticalAlignment="Bottom" Height="64">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#00F7F7F8" Offset="0"/>
+                                <GradientStop Color="#FFF7F7F8" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

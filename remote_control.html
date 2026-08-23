@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>AuralDesk 遥控</title>
+<style>
+  :root {
+    --bg: #101216;
+    --card: #1a1d24;
+    --card2: #21242c;
+    --text: #e8eaed;
+    --dim: #9aa0a8;
+    --accent: #0a6ebe;
+    --ok: #1d8a3e;
+    --danger: #c0392b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+    max-width: 560px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px 10px;
+  }
+  header .logo {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, #0a6ebe, #2a8fd6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #fff; font-weight: 700;
+  }
+  header .title { font-size: 15px; font-weight: 600; flex: 1; }
+  header .conn { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+  .dot.on { background: var(--ok); }
+
+  .now { margin: 4px 16px; padding: 14px; background: var(--card); border-radius: 14px; }
+  .now .row { display: flex; gap: 12px; align-items: center; }
+  .cover {
+    width: 54px; height: 54px; border-radius: 10px; flex: 0 0 54px;
+    background: var(--card2); display: flex; align-items: center; justify-content: center;
+    color: var(--dim); font-size: 24px;
+  }
+  .now .meta { flex: 1; min-width: 0; }
+  .now .t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now .s { font-size: 12px; color: var(--dim); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now .src { font-size: 10px; color: var(--accent); margin-top: 3px; }
+
+  .progress { padding: 12px 16px 0; }
+  .progress .times { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 6px; }
+  .progress input[type=range] {
+    width: 100%; height: 26px; -webkit-appearance: none; appearance: none; background: transparent; margin: 0;
+  }
+  .progress input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent) var(--fill, 0%), #33363e var(--fill, 0%));
+  }
+  .progress input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; margin-top: -5px; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+
+  .controls { display: flex; align-items: center; justify-content: center; gap: 40px; padding: 10px 0 16px; }
+  .cbtn {
+    width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--card2); color: var(--text); font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cbtn:active { opacity: .7; }
+  .cbtn.main { width: 64px; height: 64px; background: var(--accent); font-size: 26px; }
+
+  .tabs { display: flex; margin: 0 16px; background: var(--card); border-radius: 10px; overflow: hidden; }
+  .tabs button {
+    flex: 1; padding: 9px 0; border: none; background: transparent; color: var(--dim);
+    font-size: 13px; cursor: pointer;
+  }
+  .tabs button.active { color: var(--text); background: var(--card2); }
+
+  .panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .scroll { flex: 1; overflow-y: auto; padding: 12px 16px 24px; -webkit-overflow-scrolling: touch; }
+  .lyric-line { padding: 7px 4px; font-size: 14px; color: var(--dim); line-height: 1.5; }
+  .lyric-line .trans { font-size: 12px; color: #6b7077; margin-top: 2px; }
+  .lyric-line.active { color: var(--text); font-weight: 600; font-size: 15px; }
+  .lyric-line.active .trans { color: var(--accent); }
+  .q-item { display: flex; padding: 10px 4px; border-bottom: 1px solid #1e2128; gap: 8px; align-items: center; }
+  .q-item .bar { width: 3px; height: 18px; border-radius: 2px; background: transparent; }
+  .q-item.current .bar { background: var(--accent); }
+  .q-item .info { flex: 1; min-width: 0; }
+  .q-item .qt { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q-item .qs { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .q-item.current .qt { color: var(--accent); }
+  .empty { color: var(--dim); text-align: center; padding: 40px 0; font-size: 13px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">A</div>
+    <div class="title">AuralDesk 遥控</div>
+    <div class="conn"><span id="dot" class="dot"></span><span id="connText">连接中…</span></div>
+  </header>
+
+  <div class="now">
+    <div class="row">
+      <div class="cover">&#9835;</div>
+      <div class="meta">
+        <div class="t" id="title">未在播放</div>
+        <div class="s" id="singer"></div>
+        <div class="src" id="source"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress">
+    <div class="times"><span id="posText">0:00</span><span id="durText">0:00</span></div>
+    <input type="range" id="seek" min="0" max="0" step="1" value="0">
+  </div>
+
+  <div class="controls">
+    <button class="cbtn" id="prevBtn">&#9198;</button>
+    <button class="cbtn main" id="playBtn">&#9654;</button>
+    <button class="cbtn" id="nextBtn">&#9197;</button>
+  </div>
+
+  <div class="tabs">
+    <button id="tabLyric" class="active">歌词</button>
+    <button id="tabQueue">队列</button>
+  </div>
+
+  <div class="panel">
+    <div class="scroll" id="lyricPanel"></div>
+    <div class="scroll" id="queuePanel" style="display:none"></div>
+  </div>
+
+<script>
+var connected = false;
+var dragging = false;
+var lastSongKey = "";
+var lyricData = null;
+var lyricActive = -1;
+var queueData = [];
+
+function fmt(sec) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  sec = Math.floor(sec);
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+function setConn(on) {
+  connected = on;
+  document.getElementById("dot").className = "dot" + (on ? " on" : "");
+  document.getElementById("connText").textContent = on ? "已连接" : "未连接";
+}
+async function post(path, body) {
+  try {
+    await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body || null });
+  } catch (e) { setConn(false); }
+}
+async function pollStatus() {
+  var r;
+  try { r = await fetch("/api/status", { cache: "no-store" }); }
+  catch (e) { setConn(false); return; }
+  if (!r.ok) { setConn(false); return; }
+  setConn(true);
+  var s = await r.json();
+  document.getElementById("title").textContent = s.title || "未在播放";
+  document.getElementById("singer").textContent = s.singer || "";
+  document.getElementById("source").textContent = s.source || "";
+  document.getElementById("playBtn").innerHTML = s.playing ? "&#10073;&#10073;" : "&#9654;";
+  var len = s.length || 0;
+  var pos = s.position || 0;
+  var durEl = document.getElementById("durText");
+  var posEl = document.getElementById("posText");
+  if (durEl.textContent !== fmt(len)) durEl.textContent = fmt(len);
+  var seekEl = document.getElementById("seek");
+  if (!dragging) {
+    seekEl.max = len > 0 ? len : 0;
+    seekEl.value = pos;
+    posEl.textContent = fmt(pos);
+    var pct = len > 0 ? Math.min(100, pos / len * 100) : 0;
+    seekEl.style.setProperty("--fill", pct + "%");
+  }
+  var key = s.title + "|" + s.singer;
+  if (key !== lastSongKey) {
+    lastSongKey = key;
+    lyricData = null;
+    lyricActive = -1;
+    loadLyric();
+    loadQueue();
+  }
+}
+async function loadLyric() {
+  var r;
+  try { r = await fetch("/api/lyric", { cache: "no-store" }); }
+  catch (e) { return; }
+  if (!r.ok) return;
+  lyricData = await r.json();
+  renderLyric();
+}
+function renderLyric() {
+  var p = document.getElementById("lyricPanel");
+  if (!lyricData || !lyricData.lines || lyricData.lines.length === 0) {
+    p.innerHTML = '<div class="empty">暂无歌词</div>';
+    return;
+  }
+  var html = lyricData.lines.map(function (l, i) {
+    return '<div class="lyric-line" id="ll' + i + '">' + esc(l.main) +
+      (l.trans ? '<div class="trans">' + esc(l.trans) + '</div>' : '') + '</div>';
+  }).join("");
+  p.innerHTML = html;
+  highlightLyric(lyricActive);
+}
+function highlightLyric(idx) {
+  if (!lyricData || !lyricData.lines) return;
+  if (idx < 0 || idx >= lyricData.lines.length) idx = -1;
+  if (idx === lyricActive && idx >= 0) return;
+  var prev = document.querySelector(".lyric-line.active");
+  if (prev) prev.classList.remove("active");
+  lyricActive = idx;
+  if (idx >= 0) {
+    var el = document.getElementById("ll" + idx);
+    if (el) {
+      el.classList.add("active");
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+}
+function esc(s) {
+  var d = document.createElement("div");
+  d.textContent = s || "";
+  return d.innerHTML;
+}
+async function loadQueue() {
+  var r;
+  try { r = await fetch("/api/queue", { cache: "no-store" }); }
+  catch (e) { return; }
+  if (!r.ok) return;
+  queueData = await r.json();
+  var p = document.getElementById("queuePanel");
+  if (!queueData || queueData.length === 0) {
+    p.innerHTML = '<div class="empty">队列为空</div>';
+    return;
+  }
+  p.innerHTML = queueData.map(function (q) {
+    return '<div class="q-item' + (q.isCurrent ? " current" : "") + '">' +
+      '<div class="bar"></div>' +
+      '<div class="info"><div class="qt">' + esc(q.title) + '</div>' +
+      '<div class="qs">' + esc(q.singer) + '</div></div></div>';
+  }).join("");
+}
+function updateLyricActive() {
+  if (!lyricData || !lyricData.lines || lyricData.lines.length === 0) return;
+  var pos = parseFloat(document.getElementById("seek").value) || 0;
+  var idx = -1;
+  for (var i = 0; i < lyricData.lines.length; i++) {
+    if (lyricData.lines[i].time <= pos) idx = i; else break;
+  }
+  highlightLyric(idx);
+}
+
+document.getElementById("playBtn").onclick = function () { post("/api/toggle"); };
+document.getElementById("prevBtn").onclick = function () { post("/api/prev"); };
+document.getElementById("nextBtn").onclick = function () { post("/api/next"); };
+var seekEl = document.getElementById("seek");
+seekEl.addEventListener("input", function () {
+  dragging = true;
+  document.getElementById("posText").textContent = fmt(parseFloat(seekEl.value));
+  var len = parseFloat(seekEl.max) || 0;
+  var pct = len > 0 ? Math.min(100, seekEl.value / len * 100) : 0;
+  seekEl.style.setProperty("--fill", pct + "%");
+  updateLyricActive();
+});
+seekEl.addEventListener("change", function () {
+  post("/api/seek", JSON.stringify({ position: parseFloat(seekEl.value) }));
+  dragging = false;
+});
+document.getElementById("tabLyric").onclick = function () {
+  document.getElementById("tabLyric").className = "active";
+  document.getElementById("tabQueue").className = "";
+  document.getElementById("lyricPanel").style.display = "";
+  document.getElementById("queuePanel").style.display = "none";
+};
+document.getElementById("tabQueue").onclick = function () {
+  document.getElementById("tabQueue").className = "active";
+  document.getElementById("tabLyric").className = "";
+  document.getElementById("lyricPanel").style.display = "none";
+  document.getElementById("queuePanel").style.display = "";
+  loadQueue();
+};
+setInterval(pollStatus, 1000);
+pollStatus();
+setInterval(updateLyricActive, 1000);
+</script>
+</body>
+</html>

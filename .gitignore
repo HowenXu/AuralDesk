@@ -1,0 +1,39 @@
+# .NET / WPF
+bin/
+obj/
+publish/
+publish_win/
+release/
+release_new/
+dist/
+installer/
+installer_test/
+*.user
+
+# Python
+__pycache__/
+*.py[cod]
+qqapi/python/
+qqapi/venv/
+*.egg-info/
+
+# QQ sidecar 敏感数据（本地登录态/凭据，切勿提交）
+qqapi/app/web/data/credentials.sqlite3
+qqapi/app/web/data/credentials.sqlite3-shm
+qqapi/app/web/data/credentials.sqlite3-wal
+qqapi/app/web/data/device.json
+qqapi/app/web/data/logs/
+qqapi/app/web/accounts.toml
+
+# Android
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+
+# 其它
+*.zip
+.vs/
+Thumbs.db
