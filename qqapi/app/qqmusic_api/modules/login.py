@@ -438,6 +438,8 @@ class LoginApi(ApiModule):
             "GET",
             "https://open.weixin.qq.com/connect/qrconnect",
             params={
+                # 微信开放平台 AppID：QQ 音乐官网公开值（上游 QQMusicApi 自带），
+                # 用于生成跳转 y.qq.com 的微信扫码登录二维码，非本项目私有凭据。
                 "appid": "wx48db31d50e334801",
                 "redirect_uri": "https://y.qq.com/portal/wx_redirect.html?login_type=2&surl=https://y.qq.com/",
                 "response_type": "code",

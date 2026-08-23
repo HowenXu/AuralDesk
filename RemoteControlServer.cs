@@ -192,6 +192,7 @@ namespace AuralDesk
 
                 // 读取 body（POST）
                 var body = "";
+                if (contentLength > 1_048_576) return; // 拒绝超大请求体，防内存耗尽
                 if (contentLength > 0)
                 {
                     var bodyStart = headerEnd + 4;
@@ -287,7 +288,6 @@ namespace AuralDesk
                     "Content-Type: " + contentType + "\r\n" +
                     "Content-Length: " + responseBytes.Length + "\r\n" +
                     "Connection: close\r\n" +
-                    "Access-Control-Allow-Origin: *\r\n" +
                     "\r\n";
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(header).AsMemory(0, header.Length));
                 await stream.WriteAsync(responseBytes);
