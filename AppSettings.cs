@@ -34,6 +34,7 @@ namespace AuralDesk
         public string? CachePath { get; set; }          // 缓存目录；空则默认 Documents\AuralDesk\cache
         public int PrecacheCount { get; set; } = 2;     // 提前缓存当前曲之后的曲目数量
         public int CacheCountMode { get; set; }         // 0=按大小清理，1=按保留曲数清理
+        public int Language { get; set; }              // 界面语言：0=自动(跟随系统) 1=中文 2=English
         public int CacheCount { get; set; } = 5;        // 按曲数清理时保留的歌曲数
         public List<SavedQueueItem>? SavedQueue { get; set; }
 

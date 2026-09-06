@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <sys:String x:Key="appFooter">v0.1.0 · 界面原型</sys:String>
+    <sys:String x:Key="hqStatusNotConnected">未连接</sys:String>
+    <sys:String x:Key="langAuto">自动（跟随系统）</sys:String>
+    <sys:String x:Key="langEn">English</sys:String>
+    <sys:String x:Key="langTitle">界面语言</sys:String>
+    <sys:String x:Key="langZh">中文</sys:String>
+    <sys:String x:Key="navQueue">播放队列</sys:String>
+    <sys:String x:Key="navSettings">设置</sys:String>
+    <sys:String x:Key="navStream">流媒体</sys:String>
+    <sys:String x:Key="outHqConfigureHint">输出与升频配置请在 HQPlayer 中调整</sys:String>
+    <sys:String x:Key="outNaa">NAA（HQPlayer）</sys:String>
+    <sys:String x:Key="outSystemOutput">系统输出</sys:String>
+    <sys:String x:Key="queueView">播放队列</sys:String>
+    <sys:String x:Key="settingsLang">语言</sys:String>
+    <sys:String x:Key="settingsView">设置</sys:String>
+    <sys:String x:Key="streamView">流媒体</sys:String>
+    <sys:String x:Key="sysCpu">CPU</sys:String>
+    <sys:String x:Key="sysMemory">内存</sys:String>
+    <sys:String x:Key="sysResources">系统资源</sys:String>
+    <sys:String x:Key="topOutput">输出</sys:String>
+    <sys:String x:Key="topSource">来源</sys:String>
+</ResourceDictionary>

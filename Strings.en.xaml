@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <sys:String x:Key="appFooter">v0.1.0 · UI prototype</sys:String>
+    <sys:String x:Key="hqStatusNotConnected">Not connected</sys:String>
+    <sys:String x:Key="langAuto">Auto (system)</sys:String>
+    <sys:String x:Key="langEn">English</sys:String>
+    <sys:String x:Key="langTitle">Interface language</sys:String>
+    <sys:String x:Key="langZh">中文</sys:String>
+    <sys:String x:Key="navQueue">Play Queue</sys:String>
+    <sys:String x:Key="navSettings">Settings</sys:String>
+    <sys:String x:Key="navStream">Stream</sys:String>
+    <sys:String x:Key="outHqConfigureHint">Configure output &amp; upsampling in HQPlayer</sys:String>
+    <sys:String x:Key="outNaa">NAA (HQPlayer)</sys:String>
+    <sys:String x:Key="outSystemOutput">System output</sys:String>
+    <sys:String x:Key="queueView">Play Queue</sys:String>
+    <sys:String x:Key="settingsLang">Language</sys:String>
+    <sys:String x:Key="settingsView">Settings</sys:String>
+    <sys:String x:Key="streamView">Stream</sys:String>
+    <sys:String x:Key="sysCpu">CPU</sys:String>
+    <sys:String x:Key="sysMemory">Memory</sys:String>
+    <sys:String x:Key="sysResources">System resources</sys:String>
+    <sys:String x:Key="topOutput">Output</sys:String>
+    <sys:String x:Key="topSource">Source</sys:String>
+</ResourceDictionary>

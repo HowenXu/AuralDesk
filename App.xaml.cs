@@ -6,6 +6,13 @@ namespace AuralDesk;
 
 public partial class App : Application
 {
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        var settings = AppSettings.Load();
+        Lang.Apply(Lang.Resolve(settings), this);
+        base.OnStartup(e);
+    }
+
     public App()
     {
         // 未处理异常一律写入日志，方便在别的电脑上排查

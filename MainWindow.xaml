@@ -38,9 +38,9 @@
                     <Button x:Name="NavQueue" Tag="queue" Click="Nav_Click"
                             Style="{StaticResource NavButtonStyle}" Content="播放队列"/>
                     <Button x:Name="NavStream" Tag="stream" Click="Nav_Click"
-                            Style="{StaticResource NavButtonStyle}" Content="流媒体"/>
+                            Style="{StaticResource NavButtonStyle}" Content="{DynamicResource navStream}"/>
                     <Button x:Name="NavSettings" Tag="settings" Click="Nav_Click"
-                            Style="{StaticResource NavButtonStyle}" Content="设置"/>
+                            Style="{StaticResource NavButtonStyle}" Content="{DynamicResource navSettings}"/>
                 </StackPanel>
 
                 <!-- HQPlayer status card -->
@@ -53,7 +53,7 @@
                             <TextBlock Text="HQPlayer" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" Margin="8,0,0,0"/>
                         </StackPanel>
-                        <TextBlock x:Name="HqStatusText" Text="未连接" FontSize="10.5"
+                        <TextBlock x:Name="HqStatusText" Text="{DynamicResource hqStatusNotConnected}" FontSize="10.5"
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0"/>
                     </StackPanel>
                 </Border>
@@ -64,14 +64,14 @@
                         BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="12,10"
                         Margin="0,8,0,0">
                     <StackPanel>
-                        <TextBlock Text="系统资源" FontSize="12" FontWeight="SemiBold"
+                        <TextBlock Text="{DynamicResource sysResources}" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"/>
                         <Grid x:Name="MemRow" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="内存" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{DynamicResource sysMemory}" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBlock x:Name="MemValue" Grid.Column="1" FontSize="10.5"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Grid>
@@ -80,14 +80,14 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="CPU" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{DynamicResource sysCpu}" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBlock x:Name="CpuValue" Grid.Column="1" FontSize="10.5"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <TextBlock DockPanel.Dock="Bottom" Text="v0.1.0 · 界面原型" FontSize="9.5"
+                <TextBlock DockPanel.Dock="Bottom" Text="{DynamicResource appFooter}" FontSize="9.5"
                            Foreground="{StaticResource TextDimBrush}" Margin="2,12,0,0"/>
             </DockPanel>
         </Border>
@@ -108,29 +108,29 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="ViewTitle" Text="播放队列" FontSize="18" FontWeight="SemiBold"
+                    <TextBlock x:Name="ViewTitle" Text="{DynamicResource queueView}" FontSize="18" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <TextBlock Text="来源" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
+                            <TextBlock Text="{DynamicResource topSource}" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
                                        VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <ComboBox x:Name="SourceCombo" Width="116" Style="{StaticResource ComboStyle}"
                                       SelectionChanged="SourceCombo_SelectionChanged">
-                                <ComboBoxItem Content="播放队列" Tag="queue"/>
+                                <ComboBoxItem Content="{DynamicResource navQueue}" Tag="queue"/>
                                 <ComboBoxItem Content="QQ音乐" Tag="https://y.qq.com" IsSelected="True"/>
                                 <ComboBoxItem Content="网易云音乐" Tag="https://music.163.com" IsEnabled="False"/>
                                 <ComboBoxItem Content="Apple Music" Tag="https://music.apple.com/cn/browse" IsEnabled="False"/>
                                 <ComboBoxItem Content="自定义 URL" Tag="custom"/>
                             </ComboBox>
-                            <TextBlock Text="输出" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
+                            <TextBlock Text="{DynamicResource topOutput}" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"
                                        VerticalAlignment="Center" Margin="16,0,6,0"/>
                             <ComboBox x:Name="OutputCombo" Width="130" Style="{StaticResource ComboStyle}"
                                       SelectionChanged="OutputCombo_SelectionChanged">
-                                <ComboBoxItem Content="系统输出" IsSelected="True"/>
-                                <ComboBoxItem Content="NAA（HQPlayer）"/>
+                                <ComboBoxItem Content="{DynamicResource outSystemOutput}" IsSelected="True"/>
+                                <ComboBoxItem Content="{DynamicResource outNaa}"/>
                             </ComboBox>
                         </StackPanel>
-                        <TextBlock Text="输出与升频配置请在 HQPlayer 中调整" FontSize="9"
+                        <TextBlock Text="{DynamicResource outHqConfigureHint}" FontSize="9"
                                    Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"
                                    Margin="0,6,0,0"/>
                     </StackPanel>
@@ -1408,6 +1408,22 @@
                             <TextBlock x:Name="RemoteCtrlAddress" Margin="0,10,0,0" FontSize="13"
                                        Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"
                                        Text="未开启" TextWrapping="Wrap"/>
+
+                    <!-- Interface language -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="{DynamicResource langTitle}" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <RadioButton x:Name="LangAuto" Content="{DynamicResource langAuto}"
+                                             Style="{StaticResource RadioStyle}" Checked="LangRadio_Changed"/>
+                                <RadioButton x:Name="LangZh" Content="{DynamicResource langZh}"
+                                             Style="{StaticResource RadioStyle}" Checked="LangRadio_Changed"/>
+                                <RadioButton x:Name="LangEn" Content="{DynamicResource langEn}"
+                                             Style="{StaticResource RadioStyle}" Checked="LangRadio_Changed"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                         </StackPanel>
                     </Border>
 

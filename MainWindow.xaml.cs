@@ -710,6 +710,9 @@ namespace AuralDesk
             HqAutoStartCheck.IsChecked = settings.AutoStartHqPlayer;
             HqExePathBox.Text = settings.HqPlayerExePath ?? "";
             RemoteCtrlCheck.IsChecked = settings.RemoteControlEnabled;
+            if (settings.Language == 1) LangZh.IsChecked = true;
+            else if (settings.Language == 2) LangEn.IsChecked = true;
+            else LangAuto.IsChecked = true;
 
             ShowMemCheck.IsChecked = settings.ShowMem;
             ShowCpuCheck.IsChecked = settings.ShowCpu;
@@ -986,7 +989,8 @@ namespace AuralDesk
                     Mid = cur?.QqMid ?? "",
                     Position = pos,
                     Length = len,
-                    Playing = NowPlaying
+                    Playing = NowPlaying,
+                    Lang = Lang.IsEnglish ? "en" : "zh"
                 };
             });
         }
@@ -5030,6 +5034,18 @@ namespace AuralDesk
             var t = FindVisualChildByName(item, "DlTrack") as Grid;
             var fill = FindVisualChildByName(item, "DlFill") as Border;
             return (t, fill?.RenderTransform as ScaleTransform);
+        }
+
+        private void LangRadio_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!loaded) return;
+            if (LangZh.IsChecked == true) settings.Language = 1;
+            else if (LangEn.IsChecked == true) settings.Language = 2;
+            else settings.Language = 0;
+            SaveSettings();
+            if (Application.Current is App app)
+                Lang.Apply(Lang.Resolve(settings), app); // 替换语言资源字典，{DynamicResource} 文本即时刷新
+            UpdateRemoteStatusText();
         }
 
         private void PreCache_Changed(object sender, TextChangedEventArgs e)
