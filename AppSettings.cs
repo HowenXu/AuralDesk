@@ -35,6 +35,8 @@ namespace AuralDesk
         public int PrecacheCount { get; set; } = 2;     // 提前缓存当前曲之后的曲目数量
         public int CacheCountMode { get; set; }         // 0=按大小清理，1=按保留曲数清理
         public int Language { get; set; }              // 界面语言：0=自动(跟随系统) 1=中文 2=English
+        public int UpdateCheckInterval { get; set; } // 自动检查更新：0=每周 1=每月 2=每季度 3=每年 4=从不(默认每周)
+        public string? LastUpdateCheck { get; set; } // 上次检查更新时间（ISO UTC，仅启动时判断）
         public int CacheCount { get; set; } = 5;        // 按曲数清理时保留的歌曲数
         public List<SavedQueueItem>? SavedQueue { get; set; }
 

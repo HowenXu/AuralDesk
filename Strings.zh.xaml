@@ -22,4 +22,16 @@
     <sys:String x:Key="sysResources">系统资源</sys:String>
     <sys:String x:Key="topOutput">输出</sys:String>
     <sys:String x:Key="topSource">来源</sys:String>
+    <sys:String x:Key="updateTitle">检查更新</sys:String>
+    <sys:String x:Key="updateAutoHint">自动检查更新（仅在每次启动时判断是否到期）</sys:String>
+    <sys:String x:Key="updateWeekly">每周</sys:String>
+    <sys:String x:Key="updateMonthly">每月</sys:String>
+    <sys:String x:Key="updateQuarterly">每季度</sys:String>
+    <sys:String x:Key="updateYearly">每年</sys:String>
+    <sys:String x:Key="updateNever">不自动检查更新</sys:String>
+    <sys:String x:Key="updateNow">立即检查更新</sys:String>
+    <sys:String x:Key="updateUpToDate">当前已是最新版本</sys:String>
+    <sys:String x:Key="updateNewTitle">发现新版本</sys:String>
+    <sys:String x:Key="updateOpenRelease">前往发布页下载</sys:String>
+    <sys:String x:Key="updateCheckFailed">检查更新失败：网络或服务不可用</sys:String>
 </ResourceDictionary>

@@ -1409,7 +1409,40 @@
                                        Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"
                                        Text="未开启" TextWrapping="Wrap"/>
 
-                    <!-- Interface language -->
+                                        <!-- Update check -->
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource updateTitle}" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <Button Grid.Column="1" x:Name="UpdateCheckNow" Content="{DynamicResource updateNow}"
+                                        Style="{StaticResource TogglePillStyle}" Click="UpdateCheckNow_Click"/>
+                            </Grid>
+                            <TextBlock Text="{DynamicResource updateAutoHint}" FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ComboBox x:Name="UpdateIntervalCombo" Width="168"
+                                          Style="{StaticResource ComboStyle}"
+                                          SelectionChanged="UpdateIntervalCombo_Changed">
+                                    <ComboBoxItem Content="{DynamicResource updateWeekly}"/>
+                                    <ComboBoxItem Content="{DynamicResource updateMonthly}"/>
+                                    <ComboBoxItem Content="{DynamicResource updateQuarterly}"/>
+                                    <ComboBoxItem Content="{DynamicResource updateYearly}"/>
+                                    <ComboBoxItem Content="{DynamicResource updateNever}"/>
+                                </ComboBox>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+<!-- Interface language -->
                     <Border Style="{StaticResource SectionCardStyle}">
                         <StackPanel>
                             <TextBlock Text="{DynamicResource langTitle}" FontSize="14" FontWeight="SemiBold"

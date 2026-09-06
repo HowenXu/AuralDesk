@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -163,6 +164,7 @@ namespace AuralDesk
             ApplySettings();
             loaded = true;
             ApplyRemoteControl();
+            Loaded += (_, _) => Dispatcher.BeginInvoke(new Action(CheckForUpdatesOnStart));
             statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             statsTimer.Tick += UpdateStats;
             statsTimer.Start();
@@ -713,6 +715,7 @@ namespace AuralDesk
             if (settings.Language == 1) LangZh.IsChecked = true;
             else if (settings.Language == 2) LangEn.IsChecked = true;
             else LangAuto.IsChecked = true;
+            UpdateIntervalCombo.SelectedIndex = Math.Clamp(settings.UpdateCheckInterval, 0, 4);
 
             ShowMemCheck.IsChecked = settings.ShowMem;
             ShowCpuCheck.IsChecked = settings.ShowCpu;
@@ -5044,9 +5047,81 @@ namespace AuralDesk
             else settings.Language = 0;
             SaveSettings();
             if (Application.Current is App app)
-                Lang.Apply(Lang.Resolve(settings), app); // 替换语言资源字典，{DynamicResource} 文本即时刷新
+                Lang.Apply(Lang.Resolve(settings), app); // replace language dictionary, DynamicResource texts refresh immediately
             UpdateRemoteStatusText();
         }
+
+        private void UpdateIntervalCombo_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (!loaded) return;
+            settings.UpdateCheckInterval = Math.Clamp(UpdateIntervalCombo.SelectedIndex, 0, 4);
+            SaveSettings();
+        }
+
+        private void UpdateCheckNow_Click(object sender, RoutedEventArgs e)
+        {
+            _ = CheckForUpdatesAsync(manual: true);
+        }
+
+        /// <summary>On startup decide whether an automatic check is due (only evaluated at startup).</summary>
+        private void CheckForUpdatesOnStart()
+        {
+            var interval = Math.Clamp(settings.UpdateCheckInterval, 0, 4);
+            if (interval == 4) return; // never
+            var span = interval switch
+            {
+                0 => TimeSpan.FromDays(7),
+                1 => TimeSpan.FromDays(30),
+                2 => TimeSpan.FromDays(92),
+                _ => TimeSpan.FromDays(365),
+            };
+            if (DateTime.TryParse(settings.LastUpdateCheck, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var last)
+                && DateTime.UtcNow - last < span)
+            {
+                return;
+            }
+            _ = CheckForUpdatesAsync(manual: false);
+        }
+
+        /// <summary>Check GitHub latest release; errors are silent unless the user clicked manually.</summary>
+        private async System.Threading.Tasks.Task CheckForUpdatesAsync(bool manual)
+        {
+            settings.LastUpdateCheck = DateTime.UtcNow.ToString("o");
+            SaveSettings();
+            try
+            {
+                using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("AuralDesk/" + CurrentVersion);
+                var json = await client.GetStringAsync("https://api.github.com/repos/HowenXu/AuralDesk/releases/latest");
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var tag = doc.RootElement.TryGetProperty("tag_name", out var tEl) ? tEl.GetString() : null;
+                if (string.IsNullOrWhiteSpace(tag) || !Version.TryParse(tag.TrimStart('v'), out var remote)) return;
+                if (remote > CurrentVersion)
+                {
+                    var ask = MessageBox.Show(
+                        Lang.T("updateNewTitle") + " v" + remote + "\n\n" + Lang.T("updateOpenRelease") + "?",
+                        "AuralDesk", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                    if (ask == MessageBoxResult.Yes)
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                            "https://github.com/HowenXu/AuralDesk/releases/latest") { UseShellExecute = true });
+                }
+                else if (manual)
+                {
+                    MessageBox.Show(Lang.T("updateUpToDate"), "AuralDesk",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch
+            {
+                if (manual)
+                    MessageBox.Show(Lang.T("updateCheckFailed"), "AuralDesk",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private static Version CurrentVersion =>
+            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 1, 0);
 
         private void PreCache_Changed(object sender, TextChangedEventArgs e)
         {

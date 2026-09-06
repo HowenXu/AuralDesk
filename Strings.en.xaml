@@ -22,4 +22,16 @@
     <sys:String x:Key="sysResources">System resources</sys:String>
     <sys:String x:Key="topOutput">Output</sys:String>
     <sys:String x:Key="topSource">Source</sys:String>
+    <sys:String x:Key="updateTitle">Check for updates</sys:String>
+    <sys:String x:Key="updateAutoHint">Automatic check (evaluated only at each app start)</sys:String>
+    <sys:String x:Key="updateWeekly">Weekly</sys:String>
+    <sys:String x:Key="updateMonthly">Monthly</sys:String>
+    <sys:String x:Key="updateQuarterly">Quarterly</sys:String>
+    <sys:String x:Key="updateYearly">Yearly</sys:String>
+    <sys:String x:Key="updateNever">Never</sys:String>
+    <sys:String x:Key="updateNow">Check now</sys:String>
+    <sys:String x:Key="updateUpToDate">You are up to date</sys:String>
+    <sys:String x:Key="updateNewTitle">New version available</sys:String>
+    <sys:String x:Key="updateOpenRelease">Go to releases</sys:String>
+    <sys:String x:Key="updateCheckFailed">Update check failed: network or service unavailable</sys:String>
 </ResourceDictionary>
