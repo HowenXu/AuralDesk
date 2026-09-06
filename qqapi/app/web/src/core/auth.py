@@ -127,7 +127,7 @@ async def configured_credential_for_api(
 ) -> Credential:
     """解析指定 API 的 Cookie 或全局默认 Credential."""
     if credential_has_login(cookie_credential):
-        logger.debug("API %s 使用 Cookie 凭证 (musicid: %s)", api_key, cookie_credential.musicid)
+        logger.debug("API %s 使用 Cookie 凭证", api_key)
         return cookie_credential
 
     credential_config = get_credential_config(request)
@@ -142,19 +142,19 @@ async def configured_credential_for_api(
 
     logger.debug("API %s 尝试使用全局默认凭证", api_key)
     for candidate in await run_sync(store.random_credentials):
-        logger.debug("API %s 检查凭证 %s", api_key, candidate.musicid)
+        logger.debug("API %s 检查默认凭证是否可用", api_key)
         if await _credential_is_expired(candidate, client):
-            logger.debug("API %s 凭证 %s 已过期, 准备刷新", api_key, candidate.musicid)
+            logger.debug("API %s 默认凭证已过期, 准备刷新", api_key)
             refreshed = await _refresh_configured_credential(
                 store=store,
                 client=client,
                 candidate=candidate,
             )
             if refreshed is None:
-                logger.debug("API %s 凭证 %s 刷新失败, 尝试下一个", api_key, candidate.musicid)
+                logger.debug("API %s 默认凭证刷新失败, 尝试下一个", api_key)
                 continue
             candidate = refreshed
-        logger.info("API %s 使用全局默认凭证 (musicid: %s)", api_key, candidate.musicid)
+        logger.debug("API %s 使用全局默认凭证", api_key)
         return resolve_configured_default_credential(cookie_credential, candidate)
 
     logger.warning("API %s 没有可用的全局默认凭证, 使用 Cookie 凭证", api_key)
