@@ -25,7 +25,7 @@ jobs:
           KS_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
+          if [ -z "$KS_B64" ]; then
             echo "::error::KEYSTORE_BASE64 secret is not configured."
             exit 1
           fi
