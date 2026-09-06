@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-QQMusic QMC 加密文件解密工具
-================================
+QQMusic QMC encrypted-file decryptor
+====================================
 
-纯 Python 实现，无第三方依赖（仅标准库），Windows / macOS / Linux 均可直接运行。
+Pure-Python implementation with zero third-party dependencies (standard
+library only); runs on Windows / macOS / Linux as-is.
 
-支持格式
---------
-* v1 静态密钥（.tkm / .bkc* / 十六进制扩展名等旧格式）
-* v2 内嵌 EKey（.mflac / .mgg / .mgg0 / .mgg1 / .mflac0 / .mmp4 /
-  .qmcflac / .qmcogg / .qmc0 / .qmc2 / .qmc3 / .qmc4 / .qmc6 / .qmc8）
-  —— 包括“QQMusic EncV2,Key:”双层 TEA 与单层 V1 两种 EKey 形式，
-     以及 Map（短密钥）与 RC4（长密钥）两种流密码。
-* Android QTag（内嵌 EKey）可离线解密；
-  Android STag / PC MusicEx（无内嵌 EKey）需要联网向服务器取密钥，
-  本工具会给出提示并支持通过 --ekey 手动提供。
+Supported formats
+-----------------
+* v1 static key (.tkm / .bkc* / hex extensions, legacy)
+* v2 embedded EKey (.mflac / .mgg / .mgg0 / .mgg1 / .mflac0 / .mmp4 /
+  .qmcflac / .qmcogg / .qmc0 / .qmc2 / .qmc3 / .qmc4 / .qmc6 / .qmc8)
+  - including both the "QQMusic EncV2,Key:" two-layer TEA and the
+    single-layer V1 EKey forms, and both Map (short-key) and RC4
+    (long-key) stream ciphers
+* Android QTag (embedded EKey) decrypts offline;
+  Android STag / PC MusicEx (no embedded EKey) need a key fetched from the
+  server - the tool tells you and supports --ekey for manual keys
 
-算法以 unlock-music 项目官方 Rust 实现（lib_um_crypto_rust）为参照逐一对拍移植，
-内置大量 Rust 单元测试向量，可用 --self-test 自检。
+Algorithms are ported 1:1 from the official unlock-music Rust
+implementation (lib_um_crypto_rust); unit-test vectors are included - check
+with --self-test.
 
-本项目仅供下载学习使用，请在24小时内自行删除。
+For learning purposes only - delete downloaded content within 24 hours.
 """
 
 import argparse
