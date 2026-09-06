@@ -160,6 +160,60 @@ class MainActivity : Activity() {
                 runOnUiThread { connect("") }
             }
         }
+        checkForUpdatesWeekly()
+    }
+
+    /** Weekly silent update check at startup; no settings. On failure (GitHub unreachable) the check time is not recorded so it retries next launch. */
+    private fun checkForUpdatesWeekly() {
+        thread {
+            try {
+                val last = prefs.getLong("lastUpdateCheck", 0L)
+                if (System.currentTimeMillis() - last < 7L * 86400_000L) return@thread
+                val conn = java.net.URL("https://api.github.com/repos/HowenXu/AuralDesk/releases/latest")
+                    .openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                conn.setRequestProperty("User-Agent", "AuralDeskRemote")
+                if (conn.responseCode in 200..299) {
+                    val j = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                    val tag = j.optString("tag_name", "").trimStart('v')
+                    val remote = parseVersion(tag)
+                    val cur = parseVersion(packageManager.getPackageInfo(packageName, 0).versionName ?: "")
+                    prefs.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply()
+                    if (tag.isNotEmpty() && remote != null && cur != null && greater(remote, cur)) {
+                        runOnUiThread {
+                            android.app.AlertDialog.Builder(this)
+                                .setTitle(getString(R.string.update_title))
+                                .setMessage(getString(R.string.update_msg, tag))
+                                .setPositiveButton(android.R.string.yes) { _, _ ->
+                                    startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HowenXu/AuralDesk/releases/latest"))
+                                    )
+                                }
+                                .setNegativeButton(android.R.string.no, null)
+                                .show()
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // offline / GitHub unreachable: lastUpdateCheck stays unset -> retried next start
+            }
+        }
+    }
+
+    private fun parseVersion(v: String): List<Int>? {
+        val nums = ArrayList<Int>(3)
+        for (s in v.trim().split('.').take(3)) {
+            nums.add(s.toIntOrNull() ?: return null)
+        }
+        return nums
+    }
+
+    private fun greater(a: List<Int>, b: List<Int>): Boolean {
+        for (i in 0 until minOf(a.size, b.size)) {
+            if (a[i] != b[i]) return a[i] > b[i]
+        }
+        return a.size > b.size
     }
 
     private fun buildUi() {

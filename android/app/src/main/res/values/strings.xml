@@ -59,4 +59,6 @@
     <string name="sort_default">Default order</string>
     <string name="move_up">Move up</string>
     <string name="move_down">Move down</string>
+    <string name="update_title">New version available</string>
+    <string name="update_msg">A new version v%1$s is available. Open the releases page?</string>
 </resources>

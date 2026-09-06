@@ -5088,8 +5088,6 @@ namespace AuralDesk
         /// <summary>Check GitHub latest release; errors are silent unless the user clicked manually.</summary>
         private async System.Threading.Tasks.Task CheckForUpdatesAsync(bool manual)
         {
-            settings.LastUpdateCheck = DateTime.UtcNow.ToString("o");
-            SaveSettings();
             try
             {
                 using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -5098,6 +5096,9 @@ namespace AuralDesk
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
                 var tag = doc.RootElement.TryGetProperty("tag_name", out var tEl) ? tEl.GetString() : null;
                 if (string.IsNullOrWhiteSpace(tag) || !Version.TryParse(tag.TrimStart('v'), out var remote)) return;
+                // 仅请求成功才记录检查时间：连不上(网络失败)时不记录，下次启动会再检查
+                settings.LastUpdateCheck = DateTime.UtcNow.ToString("o");
+                SaveSettings();
                 if (remote > CurrentVersion)
                 {
                     var ask = MessageBox.Show(
