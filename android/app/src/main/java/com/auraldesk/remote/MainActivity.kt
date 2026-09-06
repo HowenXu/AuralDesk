@@ -2,6 +2,7 @@ package com.auraldesk.remote
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -28,8 +29,23 @@ import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.concurrent.thread
+import java.util.Locale
+
+object RemoteLang {
+    @Volatile var tag: String? = null   // zh/en；null = follow system
+}
 
 class MainActivity : Activity() {
+    override fun attachBaseContext(newBase: Context) {
+        val tag = RemoteLang.tag
+        super.attachBaseContext(
+            if (tag != null) {
+                newBase.createConfigurationContext(
+                    Configuration(newBase.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+                )
+            } else newBase
+        )
+    }
     private lateinit var rootPanel: LinearLayout
     private lateinit var connDot: View
     private lateinit var connText: TextView
@@ -158,7 +174,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(8))
         }
         header.addView(TextView(this).apply {
-            text = "AuralDesk 遥控"
+            text = getString(R.string.remote_title)
             textSize = 17f
             setTextColor(txt)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -172,14 +188,14 @@ class MainActivity : Activity() {
         }
         header.addView(connDot)
         connText = TextView(this).apply {
-            text = "未连接"
+            text = getString(R.string.status_disconnected)
             textSize = 12f
             setTextColor(dim)
             setPadding(dp(6), 0, 0, 0)
         }
         header.addView(connText)
         header.addView(Button(this).apply {
-            text = "断开"
+            text = getString(R.string.action_disconnect)
             textSize = 12f
             setTextColor(txt)
             setOnClickListener {
@@ -198,7 +214,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), 0, dp(16), dp(8))
         }
         val addr = EditText(this).apply {
-            hint = "电脑地址（留空自动扫描）"
+            hint = getString(R.string.addr_hint)
             textSize = 13f
             setTextColor(txt)
             setHintTextColor(dim)
@@ -206,7 +222,7 @@ class MainActivity : Activity() {
         }
         connRow.addView(addr)
         connRow.addView(Button(this).apply {
-            text = "连接"
+            text = getString(R.string.action_connect)
             setOnClickListener { connect(addr.text.toString().trim()) }
         })
         rootPanel.addView(connRow)
@@ -215,8 +231,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(16), 0, dp(16), dp(8))
         }
-        tabQq = Button(this).apply { text = "流媒体" }
-        tabQueue = Button(this).apply { text = "播放队列" }
+        tabQq = Button(this).apply { text = getString(R.string.tab_stream) }
+        tabQueue = Button(this).apply { text = getString(R.string.tab_queue) }
         tabs.addView(tabQq, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         tabs.addView(tabQueue, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         tabQq.setOnClickListener { showTab("qq") }
@@ -236,7 +252,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), 0, dp(16), 0)
         }
-        qqBackBtn = Button(this).apply { text = "‹ 返回" }
+        qqBackBtn = Button(this).apply { text = getString(R.string.back) }
         qqToolbar.addView(qqBackBtn)
         qqTitle = TextView(this).apply {
             textSize = 15f
@@ -247,7 +263,7 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         qqToolbar.addView(qqTitle)
-        qqRandomBtn = Button(this).apply { text = "随机播放" }
+        qqRandomBtn = Button(this).apply { text = getString(R.string.shuffle) }
         qqToolbar.addView(qqRandomBtn)
         qqSearchOpenBtn = ImageButton(this).apply {
             setImageResource(R.drawable.ic_search)
@@ -268,13 +284,13 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         qqSearchInput = EditText(this).apply {
-            hint = "搜索歌曲"
+            hint = getString(R.string.search_placeholder)
             textSize = 13f
             setTextColor(txt)
             setHintTextColor(dim)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        qqSearchBtn = Button(this).apply { text = "搜索" }
+        qqSearchBtn = Button(this).apply { text = getString(R.string.search) }
         qqSearchRow.addView(qqSearchInput)
         qqSearchRow.addView(qqSearchBtn)
         qqSearchBtn.setOnClickListener {
@@ -290,7 +306,7 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         qqListFilter = EditText(this).apply {
-            hint = "在当前列表搜索（标题/歌手）"
+            hint = getString(R.string.list_search_hint)
             textSize = 13f
             setTextColor(txt)
             setHintTextColor(dim)
@@ -304,7 +320,7 @@ class MainActivity : Activity() {
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
         qqListFilterRow.addView(qqListFilter)
-        qqSortBtn = Button(this).apply { text = "排序" }
+        qqSortBtn = Button(this).apply { text = getString(R.string.sort) }
         qqSortBtn.setOnClickListener { showQqSortMenu() }
         qqListFilterRow.addView(qqSortBtn)
         qqPanel.addView(qqListFilterRow)
@@ -336,11 +352,11 @@ class MainActivity : Activity() {
             setPadding(dp(16), 0, dp(16), 0)
         }
         sToolbar.addView(Button(this).apply {
-            text = "‹ 返回"
+            text = getString(R.string.back)
             setOnClickListener { panelBack() }
         })
         sToolbar.addView(TextView(this).apply {
-            text = "在线搜索"
+            text = getString(R.string.online_search)
             textSize = 15f
             setTextColor(txt)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -354,7 +370,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(8), dp(16), 0)
         }
         qqSearchInput2 = EditText(this).apply {
-            hint = "搜索单曲 / 专辑 / 歌手"
+            hint = getString(R.string.online_hint)
             textSize = 13f
             setTextColor(txt)
             setHintTextColor(dim)
@@ -362,7 +378,7 @@ class MainActivity : Activity() {
         }
         sRow.addView(qqSearchInput2)
         sRow.addView(Button(this).apply {
-            text = "搜索"
+            text = getString(R.string.search)
             setOnClickListener { doOnlineSearch() }
         })
         qqSearchPanel.addView(sRow)
@@ -370,9 +386,9 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(16), dp(8), dp(16), 0)
         }
-        qqSearchTabSong = Button(this).apply { text = "单曲" }
-        qqSearchTabAlbum = Button(this).apply { text = "专辑" }
-        qqSearchTabSinger = Button(this).apply { text = "歌手" }
+        qqSearchTabSong = Button(this).apply { text = getString(R.string.tab_songs) }
+        qqSearchTabAlbum = Button(this).apply { text = getString(R.string.tab_albums) }
+        qqSearchTabSinger = Button(this).apply { text = getString(R.string.tab_artists) }
         sTabs.addView(qqSearchTabSong, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sTabs.addView(qqSearchTabAlbum, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sTabs.addView(qqSearchTabSinger, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -402,7 +418,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), 0, dp(16), 0)
         }
         siToolbar.addView(Button(this).apply {
-            text = "‹ 返回"
+            text = getString(R.string.back)
             setOnClickListener { panelBack() }
         })
         singerTitle = TextView(this).apply {
@@ -424,15 +440,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(16), dp(8), dp(16), 0)
         }
-        singerTabSongs = Button(this).apply { text = "歌曲" }
-        singerTabAlbums = Button(this).apply { text = "专辑" }
+        singerTabSongs = Button(this).apply { text = getString(R.string.songs) }
+        singerTabAlbums = Button(this).apply { text = getString(R.string.tab_albums) }
         siTabs.addView(singerTabSongs, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         siTabs.addView(singerTabAlbums, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         singerTabSongs.setOnClickListener { act(mapOf("action" to "singerTab", "tab" to "songs")) }
         singerTabAlbums.setOnClickListener { act(mapOf("action" to "singerTab", "tab" to "albums")) }
         singerPanel.addView(siTabs)
         singerFilter = EditText(this).apply {
-            hint = "在歌手歌曲/专辑中搜索"
+            hint = getString(R.string.artist_search_hint)
             textSize = 13f
             setTextColor(txt)
             setHintTextColor(dim)
@@ -468,11 +484,11 @@ class MainActivity : Activity() {
             setPadding(dp(16), 0, dp(16), 0)
         }
         alToolbar.addView(Button(this).apply {
-            text = "‹ 返回"
+            text = getString(R.string.back)
             setOnClickListener { panelBack() }
         })
         albumTitle = TextView(this).apply {
-            text = "收藏的专辑"
+            text = getString(R.string.fav_albums)
             textSize = 15f
             setTextColor(txt)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -501,20 +517,20 @@ class MainActivity : Activity() {
             setPadding(dp(16), 0, dp(16), 0)
         }
         queueTitleText = TextView(this).apply {
-            text = "播放队列"
+            text = getString(R.string.tab_queue)
             textSize = 15f
             setTextColor(txt)
             setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         qToolbar.addView(queueTitleText)
-        queueJumpBtn = Button(this).apply { text = "跳到当前" }
+        queueJumpBtn = Button(this).apply { text = getString(R.string.jump_current) }
         queueJumpBtn.setOnClickListener { jumpToCurrent() }
-        queueSelectAllBtn = Button(this).apply { text = "全选" }
+        queueSelectAllBtn = Button(this).apply { text = getString(R.string.select_all) }
         queueSelectAllBtn.setOnClickListener { toggleSelectAll() }
-        queueDeleteSelBtn = Button(this).apply { text = "删除" }
+        queueDeleteSelBtn = Button(this).apply { text = getString(R.string.delete) }
         queueDeleteSelBtn.setOnClickListener { deleteSelected() }
-        queueDoneBtn = Button(this).apply { text = "完成" }
+        queueDoneBtn = Button(this).apply { text = getString(R.string.done) }
         queueDoneBtn.setOnClickListener { exitMultiSelect() }
         qToolbar.addView(queueJumpBtn)
         qToolbar.addView(queueSelectAllBtn)
@@ -638,12 +654,12 @@ class MainActivity : Activity() {
 
     private fun setConn(on: Boolean) {
         connDot.setBackgroundColor(if (on) Color.rgb(29, 138, 62) else Color.rgb(192, 57, 43))
-        connText.text = if (on) "已连接" else "未连接"
+        connText.text = if (on) getString(R.string.connected) else getString(R.string.status_disconnected)
     }
 
     private fun setConnConnecting() {
         connDot.setBackgroundColor(Color.rgb(150, 150, 150))
-        connText.text = "连接中…"
+        connText.text = getString(R.string.status_connecting)
     }
 
     private fun fmt(sec: Double): String {
@@ -656,7 +672,7 @@ class MainActivity : Activity() {
     }
 
     private fun connect(manual: String) {
-        connText.text = "扫描中…"
+        connText.text = getString(R.string.status_scanning)
         thread {
             var url: String? = if (manual.isEmpty()) RemoteClient.discover() else null
             if (url == null && manual.isNotEmpty()) {
@@ -668,7 +684,7 @@ class MainActivity : Activity() {
             }
             runOnUiThread {
                 if (url == null) {
-                    connText.text = "未发现电脑，检查同一 WiFi 或手动输入"
+                    connText.text = getString(R.string.status_notfound)
                 } else {
                     RemoteClient.baseUrl = url
                     prefs.edit().putString("baseUrl", url).apply()
@@ -707,10 +723,16 @@ class MainActivity : Activity() {
     }
 
     private fun render(st: JSONObject) {
+        val lg = st.optString("lang", "")
+        if (lg.isNotEmpty() && RemoteLang.tag != lg) {
+            RemoteLang.tag = lg
+            recreate()
+            return
+        }
         lastCurrentIndex = st.optInt("currentIndex", lastCurrentIndex)
         val qt = st.optInt("queueTotal", 0)
-        queueTitleText.text = if (qt > 0) "播放队列（$qt）" else "播放队列"
-        nowTitle.text = st.optString("curTitle", "未在播放")
+        queueTitleText.text = if (qt > 0) getString(R.string.queue_count, qt) else getString(R.string.tab_queue)
+        nowTitle.text = st.optString("curTitle", getString(R.string.not_playing))
         val singer = st.optString("curSinger", "")
         nowMeta.text = if (singer.isEmpty()) "" else " - $singer"
         val playing = st.optBoolean("playing", false)
@@ -771,7 +793,7 @@ class MainActivity : Activity() {
         if (newSig == sig) return
         sig = newSig
 
-        qqTitle.text = title.ifEmpty { if (view == "home") "主页" else "列表" }
+        qqTitle.text = title.ifEmpty { if (view == "home") getString(R.string.home) else getString(R.string.list_tab) }
         qqBackBtn.visibility = if (view == "home") View.GONE else View.VISIBLE
         qqRandomBtn.visibility = if (view == "songs") View.VISIBLE else View.GONE
         qqSearchRow.visibility = if (view == "songs") View.VISIBLE else View.GONE
@@ -837,7 +859,7 @@ class MainActivity : Activity() {
     private fun renderSongItems(arr: JSONArray?, container: LinearLayout) {
         container.removeAllViews()
         if (arr == null || arr.length() == 0) {
-            container.addView(emptyHint("暂无歌曲"))
+            container.addView(emptyHint(getString(R.string.empty_songs)))
             return
         }
         for (i in 0 until arr.length()) {
@@ -849,7 +871,7 @@ class MainActivity : Activity() {
     private fun renderAlbumItems(arr: JSONArray?, container: LinearLayout) {
         container.removeAllViews()
         if (arr == null || arr.length() == 0) {
-            container.addView(emptyHint("暂无专辑"))
+            container.addView(emptyHint(getString(R.string.empty_albums)))
             return
         }
         for (i in 0 until arr.length()) {
@@ -902,7 +924,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setImageResource(if (albumFav) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline)
             setColorFilter(if (albumFav) Color.rgb(224, 36, 94) else dim)
-            contentDescription = if (albumFav) "取消收藏专辑" else "收藏专辑"
+            contentDescription = if (albumFav) getString(R.string.fav_album_on) else getString(R.string.fav_album_off)
             setOnClickListener { act(mapOf("action" to "toggleFavAlbum", "albumMid" to albumMid)) }
         })
         return row
@@ -911,12 +933,12 @@ class MainActivity : Activity() {
     private fun renderSingerItems(arr: JSONArray?, container: LinearLayout) {
         container.removeAllViews()
         if (arr == null || arr.length() == 0) {
-            container.addView(emptyHint("暂无歌手"))
+            container.addView(emptyHint(getString(R.string.empty_artists)))
             return
         }
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
-            val sub = "${o.optInt("songNum", 0)} 首 · ${o.optInt("albumNum", 0)} 张专辑"
+            val sub = getString(R.string.song_album_line, o.optInt("songNum", 0), o.optInt("albumNum", 0))
             container.addView(cardRow(o.optString("name", ""), sub) {
                 act(mapOf(
                     "action" to "openSinger",
@@ -941,7 +963,7 @@ class MainActivity : Activity() {
 
     private fun renderSinger(st: JSONObject) {
         localBackView = "searchOnline" // 歌手页来自搜索，返回=搜索面板
-        singerTitle.text = st.optString("singerName", "歌手")
+        singerTitle.text = st.optString("singerName", getString(R.string.artist))
         singerDesc.text = st.optString("singerDesc", "")
         singerTab = st.optString("singerTab", "songs")
         singerTabSongs.setBackgroundColor(if (singerTab == "songs") accent else card2)
@@ -994,7 +1016,7 @@ class MainActivity : Activity() {
 
     private fun renderAlbums(st: JSONObject) {
         localBackView = "home" // 收藏专辑来自主页，返回=主页
-        albumTitle.text = "收藏的专辑"
+        albumTitle.text = getString(R.string.fav_albums)
         renderAlbumItems(st.optJSONArray("favAlbums"), albumList)
     }
 
@@ -1018,7 +1040,7 @@ class MainActivity : Activity() {
         qqList.removeAllViews()
         if (cards == null || cards.length() == 0) {
             qqList.addView(TextView(this).apply {
-                text = "请先在电脑端登录 QQ 音乐"
+                text = getString(R.string.need_login)
                 textSize = 13f
                 setTextColor(dim)
                 setPadding(0, dp(20), 0, 0)
@@ -1050,7 +1072,7 @@ class MainActivity : Activity() {
         qqList.removeAllViews()
         if (list == null || list.length() == 0) {
             qqList.addView(TextView(this).apply {
-                text = "暂无歌单"
+                text = getString(R.string.no_playlists)
                 textSize = 13f
                 setTextColor(dim)
                 setPadding(0, dp(20), 0, 0)
@@ -1105,8 +1127,8 @@ class MainActivity : Activity() {
         val download = s.optDouble("download", -1.0)
         val cached = s.optBoolean("cached", false)
         val badge = when {
-            download >= 0.0 -> "下载中 ${(download * 100).toInt()}%"
-            cached -> "✓ 已缓存"
+            download >= 0.0 -> getString(R.string.downloading, (download * 100).toInt())
+            cached -> getString(R.string.cached)
             else -> null
         }
         return songRow(s, badge)
@@ -1165,7 +1187,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setImageResource(if (fav) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline)
             setColorFilter(if (fav) Color.rgb(224, 36, 94) else dim)
-            contentDescription = if (fav) "取消收藏" else "收藏"
+            contentDescription = if (fav) getString(R.string.fav_on) else getString(R.string.fav_off)
             setOnClickListener { act(mapOf("action" to "toggleFav", "mid" to mid)) }
         })
         return row
@@ -1178,21 +1200,20 @@ class MainActivity : Activity() {
 
     private fun showQqSortMenu() {
         val pm = PopupMenu(this, qqSortBtn)
-        pm.menu.add("默认排序")
-        pm.menu.add("歌名")
-        pm.menu.add("歌手")
-        pm.menu.add("时长")
-        pm.menu.add("专辑")
+        val items = listOf(
+            getString(R.string.sort_default) to "default",
+            getString(R.string.col_title) to "title",
+            getString(R.string.col_singer) to "singer",
+            getString(R.string.col_duration) to "duration",
+            getString(R.string.col_album) to "album")
+        items.forEach { (label, _) -> pm.menu.add(label) }
         pm.setOnMenuItemClickListener { item ->
-            qqSortMode = when (item.title.toString()) {
-                "歌名" -> "title"
-                "歌手" -> "singer"
-                "时长" -> "duration"
-                "专辑" -> "album"
-                else -> "default"
+            val hit = items.firstOrNull { it.first == item.title.toString() }
+            if (hit != null) {
+                qqSortMode = hit.second
+                qqSortBtn.text = item.title.toString()
+                applyQqListLocal()
             }
-            qqSortBtn.text = item.title.toString()
-            applyQqListLocal()
             true
         }
         pm.show()
@@ -1215,7 +1236,7 @@ class MainActivity : Activity() {
         lastMergedQueue = merged
         if (merged.isEmpty()) {
             queueList.addView(TextView(this).apply {
-                text = "队列为空"
+                text = getString(R.string.queue_empty)
                 textSize = 13f
                 setTextColor(dim)
                 setPadding(0, dp(20), 0, 0)
@@ -1263,7 +1284,7 @@ class MainActivity : Activity() {
                     })
                     if (cached && !isSel) {
                         addView(TextView(this@MainActivity).apply {
-                            text = "✓ 已缓存"
+                            text = getString(R.string.cached)
                             textSize = 10f
                             setTextColor(Color.rgb(29, 138, 62))
                             setPadding(dp(6), 0, 0, 0)
@@ -1284,7 +1305,7 @@ class MainActivity : Activity() {
                     scaleType = ImageView.ScaleType.CENTER_INSIDE
                     setImageResource(if (qFav) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline)
                     setColorFilter(if (qFav) Color.rgb(224, 36, 94) else dim)
-                    contentDescription = if (qFav) "取消收藏" else "收藏"
+                    contentDescription = if (qFav) getString(R.string.fav_on) else getString(R.string.fav_off)
                     setOnClickListener { act(mapOf("action" to "toggleFav", "mid" to qmid)) }
                 })
             }
@@ -1292,15 +1313,15 @@ class MainActivity : Activity() {
                 val more = Button(this).apply { text = "⋮" }
                 more.setOnClickListener { v ->
                     val pm = PopupMenu(this@MainActivity, v)
-                    pm.menu.add("上移")
-                    pm.menu.add("下移")
-                    pm.menu.add("删除")
+                    val items = listOf(
+                        getString(R.string.move_up) to "queueUp",
+                        getString(R.string.move_down) to "queueDown",
+                        getString(R.string.delete) to "queueDelete")
+                    items.forEach { (label, _) -> pm.menu.add(label) }
                     pm.setOnMenuItemClickListener { item ->
-                        when (item.title.toString()) {
-                            "上移" -> act(mapOf("action" to "queueUp", "index" to idx.toString()))
-                            "下移" -> act(mapOf("action" to "queueDown", "index" to idx.toString()))
-                            "删除" -> act(mapOf("action" to "queueDelete", "index" to idx.toString()))
-                        }
+                        val hit = items.firstOrNull { it.first == item.title.toString() }
+                        if (hit != null)
+                            act(mapOf("action" to hit.second, "index" to idx.toString()))
                         true
                     }
                     pm.show()

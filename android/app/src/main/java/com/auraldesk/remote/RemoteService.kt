@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import java.util.Locale
+import android.content.res.Configuration
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -44,6 +46,13 @@ class RemoteService : Service() {
     private var lastSinger = ""
     @Volatile
     private var lastMid = ""
+    private fun str(res: Int): String {
+        val tag = RemoteLang.tag
+        val c = if (tag != null) {
+            baseContext.createConfigurationContext(Configuration().apply { setLocale(Locale.forLanguageTag(tag)) })
+        } else this
+        return c.getString(res)
+    }
     private var lastLenMs = -1L
     private var lastPlaying = false
     private var pollCount = 0
@@ -85,7 +94,7 @@ class RemoteService : Service() {
             ACTION_CONNECT -> {
                 intent.getStringExtra(EXTRA_URL)?.let { RemoteClient.baseUrl = it }
                 if (RemoteClient.baseUrl.isNotEmpty()) {
-                    postNotification("未在播放", "", playing = false)
+                    postNotification(str(R.string.not_playing), "", playing = false)
                     startPolling()
                 }
             }
@@ -107,7 +116,7 @@ class RemoteService : Service() {
             }
             else -> {
                 if (RemoteClient.baseUrl.isNotEmpty()) {
-                    postNotification("未在播放", "", playing = false)
+                    postNotification(str(R.string.not_playing), "", playing = false)
                     startPolling()
                 } else {
                     stopSelf()
@@ -127,20 +136,22 @@ class RemoteService : Service() {
                     if (!polling) return@post
                     if (st != null) {
                         val lenMs = (st.length * 1000).toLong()
+                        val langChanged = st.lang.isNotEmpty() && RemoteLang.tag != st.lang
+                        if (langChanged) RemoteLang.tag = st.lang
                         val metaChanged = st.title != lastTitle || st.singer != lastSinger || lenMs != lastLenMs || st.mid != lastMid
                         val playingChanged = st.playing != lastPlaying
-                        if (metaChanged || playingChanged) {
+                        if (metaChanged || playingChanged || langChanged) {
                             lastTitle = st.title
                             lastSinger = st.singer
                             lastMid = st.mid
                             lastLenMs = lenMs
                             lastPlaying = st.playing
                             session.setMetadata(buildMetadata(st))
-                            postNotification(st.title.ifEmpty { "未在播放" }, st.singer, st.playing)
+                            postNotification(st.title.ifEmpty { str(R.string.not_playing) }, st.singer, st.playing)
                         }
                         // 每 30 秒强制刷新一次前台通知，避免部分 ROM 后台延迟更新通知栏
                         if (++pollCount % 15 == 0) {
-                            postNotification(lastTitle.ifEmpty { "未在播放" }, lastSinger, lastPlaying)
+                            postNotification(lastTitle.ifEmpty { str(R.string.not_playing) }, lastSinger, lastPlaying)
                         }
                         session.setPlaybackState(
                             buildPlaybackState(
@@ -164,7 +175,7 @@ class RemoteService : Service() {
 
     private fun buildMetadata(st: RemoteStatus): MediaMetadataCompat {
         val b = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, st.title.ifEmpty { "未在播放" })
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, st.title.ifEmpty { str(R.string.not_playing) })
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, st.singer)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, st.source)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, (st.length * 1000).toLong())
@@ -209,14 +220,14 @@ class RemoteService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setStyle(style)
-            .addAction(android.R.drawable.ic_media_previous, "上一首", actionIntent(ACTION_PREV))
+            .addAction(android.R.drawable.ic_media_previous, str(R.string.notif_prev), actionIntent(ACTION_PREV))
             .addAction(
                 if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                "播放/暂停",
+                str(R.string.notif_play),
                 actionIntent(ACTION_PLAY)
             )
-            .addAction(android.R.drawable.ic_media_next, "下一首", actionIntent(ACTION_NEXT))
-            .addAction(R.drawable.ic_fav_notif, "收藏", actionIntent(ACTION_FAV))
+            .addAction(android.R.drawable.ic_media_next, str(R.string.notif_next), actionIntent(ACTION_NEXT))
+            .addAction(R.drawable.ic_fav_notif, str(R.string.notif_fav), actionIntent(ACTION_FAV))
         return builder.build()
     }
 
@@ -231,7 +242,7 @@ class RemoteService : Service() {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val ch = NotificationChannel(
-                CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, str(R.string.channel_playback), NotificationManager.IMPORTANCE_LOW
             ).apply {
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC

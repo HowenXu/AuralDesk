@@ -1182,13 +1182,14 @@ namespace AuralDesk
                     queue,
                     currentIndex = currentQueueIndex,
                     playing = NowPlaying,
-                    curTitle = cur?.Title ?? "未在播放",
+                    curTitle = cur?.Title ?? Lang.T("notPlaying"),
                     curSinger = cur?.Singer ?? "",
                     curSource = cur?.Source ?? "",
                     position = pos,
                     length = len,
                     queueTotal = queueTracks.Count,
-                    queueMore = qstart + qcount < queueTracks.Count
+                    queueMore = qstart + qcount < queueTracks.Count,
+                    lang = Lang.IsEnglish ? "en" : "zh"
                 });
             });
         }
