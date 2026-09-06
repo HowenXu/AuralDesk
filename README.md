@@ -4,7 +4,7 @@
 
 > A streaming-music upsampling player for Hi-Fi setups: QQ Music Hi-Res download & decrypt → HQPlayer upsampling → NAA / USB-exclusive output.
 
-**Status:** early-stage, testing. Expect rough edges.
+**Status:** mostly feature-complete. No plans for major new features — the road to embedding HQPlayer is blocked, so expect only small fixes and UX polish from here. (Nobody really uses this anyway...)
 
 [Getting Started](#getting-started) · [Features](#features) · [Why not bundle HQPlayer](#why-hqplayer-is-not-bundled-inside-auraldesk) · [Third-party & Licenses](#third-party--licenses)
 
@@ -32,7 +32,7 @@ A common question — "can you just ship HQPlayer inside the app?" — and unfor
 - DSP changes (filters/modulators/rates) rebuild the audio pipeline, so they inherently interrupt the current track — this is a HQPlayer engine behavior we can't change from outside.
 - What we *can* do is integrate through its public control interfaces, which is exactly what AuralDesk does (remote control over HQPlayer's control API; playback, queueing, status, auto-advance).
 
-So AuralDesk is the *player + streaming front-end*, and HQPlayer remains the *upsampling engine you run separately* — on the same PC or on a dedicated machine. We think of that as a feature: you keep upgrading HQPlayer on your own schedule.
+So AuralDesk is the *player + streaming front-end*, and HQPlayer remains the *upsampling engine you run separately* — on the same PC or on a dedicated machine.
 
 ## Features
 
