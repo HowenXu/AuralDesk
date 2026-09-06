@@ -291,13 +291,13 @@ namespace AuralDesk
                 HqStatusText.Text = activeRate > 0
                     ? "已连接 · 升频 " + HqModeLabel(activeMode) + " " + FormatRate(activeRate)
                     : "已连接 · 升频";
-                NaaStatusText.Text = "NAA · 已连接";
+                NaaStatusText.Text = Lang.T("NAA · 已连接");
             }
             else
             {
                 HqStatusDot.Fill = (Brush)FindResource("TextDimBrush");
-                HqStatusText.Text = "未连接";
-                NaaStatusText.Text = "NAA · 未连接";
+                HqStatusText.Text = Lang.T("未连接");
+                NaaStatusText.Text = Lang.T("NAA · 未连接");
             }
             // 底部 NAA 芯片只在选择了 NAA 输出时出现
             NaaStatusText.Visibility = UseHqOutput ? Visibility.Visible : Visibility.Collapsed;
@@ -323,13 +323,13 @@ namespace AuralDesk
                 {
                     hqPrevState = -1;
                     hqFailCount = 0;
-                    LogQqDebug($"HQPlayer 已连接 {HqHost}:{HqPort}");
+                    LogQqDebug(string.Format(Lang.F("HQPlayer 已连接 {0}:{1}"), HqHost, HqPort));
                     SetHqConnected(true);
                     return;
                 }
                 await Task.Delay(1500);
             }
-            LogQqDebug($"HQPlayer 连接失败 {HqHost}:{HqPort}");
+            LogQqDebug(string.Format(Lang.F("HQPlayer 连接失败 {0}:{1}"), HqHost, HqPort));
             SetHqConnected(false);
         }
 
@@ -404,7 +404,7 @@ namespace AuralDesk
             hqIsPlaying = false;
             hqPrevState = -1;
             SyncPlayIcon();
-            UpdateNowPlayingInfo("未在播放", "", "");
+            UpdateNowPlayingInfo(Lang.T("未在播放"), "", "");
             ShowNoLyrics();
             settings.LastSongPath = null;
             settings.LastSongTitle = null;
@@ -412,7 +412,7 @@ namespace AuralDesk
             settings.LastSongSource = null;
             settings.LastSongPosition = 0;
             SaveSettings();
-            SetStatus("已停止播放");
+            SetStatus(Lang.T("已停止播放"));
         }
 
         private void QueueSelectAll_Click(object sender, RoutedEventArgs e)
@@ -558,7 +558,7 @@ namespace AuralDesk
                             _ = LoadQqSongMetaAsync(cur.QqSong);
                         if (!UseHqOutput && settings.LastSongPosition > 0)
                             systemPlayer.SeekTo(TimeSpan.FromSeconds(settings.LastSongPosition));
-                        SetStatus($"已恢复播放队列（{queueTracks.Count} 首）");
+                        SetStatus(string.Format(Lang.F("已恢复播放队列（{0} 首）"), queueTracks.Count));
                     }
                     else if (settings.ResumeMode >= 1)
                     {
@@ -570,7 +570,7 @@ namespace AuralDesk
                             _ = LoadQqSongMetaAsync(cur.QqSong);
                         if (!UseHqOutput && !string.IsNullOrEmpty(cur.Path) && File.Exists(cur.Path))
                             systemPlayer.Load(cur.Path);
-                        SetStatus($"播放队列已恢复（{queueTracks.Count} 首），点击播放");
+                        SetStatus(string.Format(Lang.F("播放队列已恢复（{0} 首），点击播放"), queueTracks.Count));
                     }
                 }
             }
@@ -608,7 +608,7 @@ namespace AuralDesk
                 {
                     systemPlayer.SeekTo(TimeSpan.FromSeconds(settings.LastSongPosition));
                 }
-                SetStatus("已恢复上次播放（点击播放继续）");
+                SetStatus(Lang.T("已恢复上次播放（点击播放继续）"));
             }
             catch
             {
@@ -638,7 +638,7 @@ namespace AuralDesk
             SettingsPanel.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
             ViewTitle.Text = tag switch
             {
-                "stream" => qqSource ? "QQ音乐" : "流媒体",
+                "stream" => qqSource ? Lang.T("QQ音乐") : Lang.T("流媒体"),
                 "settings" => "设置",
                 _ => "播放队列"
             };
@@ -702,7 +702,7 @@ namespace AuralDesk
             LyricOffsetBox.Text = settings.LyricOffsetMs.ToString();
 
             hqOn = settings.HqEnabled;
-            HqToggle.Content = hqOn ? "升频：开" : "升频：关";
+            HqToggle.Content = hqOn ? Lang.T("升频：开") : Lang.T("升频：关");
             HqToggle.Background = hqOn
                 ? (Brush)FindResource("OkBrush")
                 : (Brush)FindResource("TextDimBrush");
@@ -867,11 +867,11 @@ namespace AuralDesk
             {
                 HqExePathBox.Text = exe;
                 SaveSettings();
-                SetStatus("已自动定位 HQPlayer：" + exe);
+                SetStatus(Lang.T("已自动定位 HQPlayer：") + exe);
             }
             else
             {
-                SetStatus("未自动定位到 HQPlayer，请手动选择，或先安装 HQPlayer");
+                SetStatus(Lang.T("未自动定位到 HQPlayer，请手动选择，或先安装 HQPlayer"));
             }
         }
 
@@ -880,7 +880,7 @@ namespace AuralDesk
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "选择 HQPlayer 主程序",
-                Filter = "可执行程序 (*.exe)|*.exe",
+                Filter = Lang.T("可执行程序 (*.exe)|*.exe"),
                 CheckFileExists = true
             };
             if (!string.IsNullOrWhiteSpace(HqExePathBox.Text))
@@ -932,7 +932,7 @@ namespace AuralDesk
             }
             else
             {
-                RemoteCtrlAddress.Text = "未开启";
+                RemoteCtrlAddress.Text = Lang.T("未开启");
             }
         }
 
@@ -1246,7 +1246,7 @@ namespace AuralDesk
                             {
                                 qqTab = "playlists";
                                 currentPlaylistId = plId;
-                                currentPlaylistName = r.TryGetProperty("name", out var pn) ? pn.GetString() ?? "歌单" : "歌单";
+                                currentPlaylistName = r.TryGetProperty("name", out var pn) ? pn.GetString() ?? Lang.T("歌单") : Lang.T("歌单");
                                 QqHomeScroller.Visibility = Visibility.Collapsed;
                                 QqPlaylistScroller.Visibility = Visibility.Collapsed;
                                 QqSongScroller.Visibility = Visibility.Visible;
@@ -1310,7 +1310,7 @@ namespace AuralDesk
                                 var album = new QqAlbumInfo
                                 {
                                     AlbumMid = amEl.GetString() ?? "",
-                                    Name = r.TryGetProperty("name", out var anEl) ? anEl.GetString() ?? "专辑" : "专辑"
+                                    Name = r.TryGetProperty("name", out var anEl) ? anEl.GetString() ?? Lang.T("专辑") : Lang.T("专辑")
                                 };
                                 if (album.AlbumMid.Length > 0)
                                     _ = OpenAlbumAsync(album);
@@ -1322,7 +1322,7 @@ namespace AuralDesk
                                 var singer = new QqSingerInfo
                                 {
                                     SingerMid = smEl.GetString() ?? "",
-                                    Name = r.TryGetProperty("name", out var snEl) ? snEl.GetString() ?? "歌手" : "歌手"
+                                    Name = r.TryGetProperty("name", out var snEl) ? snEl.GetString() ?? Lang.T("歌手") : Lang.T("歌手")
                                 };
                                 if (singer.SingerMid.Length > 0)
                                     _ = OpenSingerAsync(singer);
@@ -1349,7 +1349,7 @@ namespace AuralDesk
                             QqSingerView.Visibility = Visibility.Collapsed;
                             QqSearchOverlay.Visibility = Visibility.Collapsed;
                             QqAlbumScroller.Visibility = Visibility.Visible;
-                            QqListTitle.Text = "收藏的专辑";
+                            QqListTitle.Text = Lang.T("收藏的专辑");
                             _ = LoadQqFavAlbumsAsync();
                             break;
                         case "loadMore":
@@ -1577,7 +1577,7 @@ namespace AuralDesk
         private void HqToggle_Click(object sender, RoutedEventArgs e)
         {
             hqOn = !hqOn;
-            HqToggle.Content = hqOn ? "升频：开" : "升频：关";
+            HqToggle.Content = hqOn ? Lang.T("升频：开") : Lang.T("升频：关");
             HqToggle.Background = hqOn
                 ? (Brush)FindResource("OkBrush")
                 : (Brush)FindResource("TextDimBrush");
@@ -1692,7 +1692,7 @@ namespace AuralDesk
             }
             catch (Exception ex)
             {
-                UrlBox.ToolTip = "浏览器初始化失败：" + ex.Message;
+                UrlBox.ToolTip = Lang.T("浏览器初始化失败：") + ex.Message;
             }
         }
 
@@ -1717,7 +1717,7 @@ namespace AuralDesk
                     ? nameEl.GetString() : "";
                 var singer = doc.RootElement.TryGetProperty("singer", out var singerEl)
                     ? singerEl.GetString() : "";
-                LogQqDebug($"收到下载请求: {songmid} / {songname} / {singer}");
+                LogQqDebug(string.Format(Lang.F("收到下载请求: {0} / {1} / {2}"), songmid, songname, singer));
                 _ = HandleQqDownloadAsync(songmid, songname ?? "", singer ?? "");
             }
             catch
@@ -1730,7 +1730,7 @@ namespace AuralDesk
         {
             try
             {
-                LogQqDebug($"开始下载: {songmid} / {songname} / {singer}");
+                LogQqDebug(string.Format(Lang.F("开始下载: {0} / {1} / {2}"), songmid, songname, singer));
                 SetStatus("QQ 下载中..." + (string.IsNullOrEmpty(songname) ? "" : $"（{songname}）"));
                 string cookieHeader = "";
                 if (Browser.CoreWebView2 != null)
@@ -1739,19 +1739,19 @@ namespace AuralDesk
                         .GetCookiesAsync("https://y.qq.com/");
                     cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
                 }
-                LogQqDebug($"Cookie 长度: {cookieHeader.Length}（内容不写入日志）");
+                LogQqDebug(string.Format(Lang.F("Cookie 长度: {0}（内容不写入日志）"), cookieHeader.Length));
                 var quality = QqQualityCombo?.SelectedIndex switch
                 {
                     0 => "m4a",
                     1 => "128",
                     _ => "320"
                 };
-                LogQqDebug($"下载音质: {quality}");
+                LogQqDebug(string.Format(Lang.F("下载音质: {0}"), quality));
                 var result = await qqDownloader.DownloadAsync(songmid, quality, cookieHeader);
                 if (result == null)
                 {
-                    LogQqDebug($"下载失败: 无权限或接口返回为空 ({songmid})");
-                    SetStatus("下载失败：无权限或接口返回为空（可能需 VIP/付费）");
+                    LogQqDebug(string.Format(Lang.F("下载失败: 无权限或接口返回为空 ({0})"), songmid));
+                    SetStatus(Lang.T("下载失败：无权限或接口返回为空（可能需 VIP/付费）"));
                     return;
                 }
                 var dir = Path.Combine(
@@ -1764,14 +1764,14 @@ namespace AuralDesk
                     : SanitizeFileName(songname);
                 var file = Path.Combine(dir, $"{safeName}.{result.Ext}");
                 await File.WriteAllBytesAsync(file, result.Data);
-                LogQqDebug($"已保存: {file} ({result.Data.Length} 字节)");
-                SetStatus($"已保存：{file}（{result.Data.Length / 1024 / 1024}MB）");
+                LogQqDebug(string.Format(Lang.F("已保存: {0} ({1} 字节)"), file, result.Data.Length));
+                SetStatus(string.Format(Lang.F("已保存：{0}（{1}MB）"), file, result.Data.Length / 1024 / 1024));
 
                 if (UseHqOutput)
                 {
                     if (!await Task.Run(() => hqPlayer.PlayFile(file)))
                     {
-                        SetStatus("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA");
+                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA"));
                         return;
                     }
                     hqIsPlaying = true;
@@ -1783,14 +1783,14 @@ namespace AuralDesk
                     var title = string.IsNullOrEmpty(songname)
                         ? Path.GetFileNameWithoutExtension(file)
                         : songname;
-                    UpdateNowPlayingInfo(title, singer, "QQ音乐 · " + quality.ToUpperInvariant());
+                    UpdateNowPlayingInfo(title, singer, Lang.T("QQ音乐 · ") + quality.ToUpperInvariant());
                     ShowNoLyrics();
-                    SetStatus($"HQPlayer 播放：{Path.GetFileName(file)}");
+                    SetStatus(string.Format(Lang.F("HQPlayer 播放：{0}"), Path.GetFileName(file)));
                     AddToQueue(new QueueTrack
                     {
                         Title = title,
                         Singer = singer,
-                        Source = "QQ音乐 · " + quality.ToUpperInvariant(),
+                        Source = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant(),
                         Path = file,
                         IsCurrent = true
                     });
@@ -1800,7 +1800,7 @@ namespace AuralDesk
                         settings.LastSongPath = file;
                         settings.LastSongTitle = title;
                         settings.LastSongSinger = singer;
-                        settings.LastSongSource = "QQ音乐 · " + quality.ToUpperInvariant();
+                        settings.LastSongSource = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant();
                         settings.LastSongPosition = 0;
                         SaveSettings();
                     }
@@ -1813,14 +1813,14 @@ namespace AuralDesk
                     var title = string.IsNullOrEmpty(songname)
                         ? Path.GetFileNameWithoutExtension(file)
                         : songname;
-                    UpdateNowPlayingInfo(title, singer, "QQ音乐 · " + quality.ToUpperInvariant());
+                    UpdateNowPlayingInfo(title, singer, Lang.T("QQ音乐 · ") + quality.ToUpperInvariant());
                     ShowNoLyrics();
-                    SetStatus($"系统输出播放：{Path.GetFileName(file)}");
+                    SetStatus(string.Format(Lang.F("系统输出播放：{0}"), Path.GetFileName(file)));
                     AddToQueue(new QueueTrack
                     {
                         Title = title,
                         Singer = singer,
-                        Source = "QQ音乐 · " + quality.ToUpperInvariant(),
+                        Source = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant(),
                         Path = file,
                         IsCurrent = true
                     });
@@ -1830,7 +1830,7 @@ namespace AuralDesk
                         settings.LastSongPath = file;
                         settings.LastSongTitle = title;
                         settings.LastSongSinger = singer;
-                        settings.LastSongSource = "QQ音乐 · " + quality.ToUpperInvariant();
+                        settings.LastSongSource = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant();
                         settings.LastSongPosition = 0;
                         SaveSettings();
                     }
@@ -1839,7 +1839,7 @@ namespace AuralDesk
             catch (Exception ex)
             {
                 LogQqDebug("下载异常: " + ex);
-                SetStatus("下载失败：" + ex.Message);
+                SetStatus(Lang.T("下载失败：") + ex.Message);
             }
         }
 
@@ -1920,7 +1920,7 @@ namespace AuralDesk
             }
             catch (Exception ex)
             {
-                UrlBox.ToolTip = "打开失败：" + ex.Message;
+                UrlBox.ToolTip = Lang.T("打开失败：") + ex.Message;
             }
         }
 
@@ -1985,7 +1985,7 @@ namespace AuralDesk
                 using var doc = JsonDocument.Parse(text);
                 var found = new List<QqSongInfo>();
                 CollectSongs(doc.RootElement, found);
-                LogQqDebug($"musicu.fcg 响应 {text.Length} 字符，解析出 {found.Count} 首");
+                LogQqDebug(string.Format(Lang.F("musicu.fcg 响应 {0} 字符，解析出 {1} 首"), text.Length, found.Count));
                 if (found.Count == 0) return;
 
                 lock (qqSongLock)
@@ -2011,7 +2011,7 @@ namespace AuralDesk
                     await Browser.CoreWebView2.ExecuteScriptAsync($"window.adSetSongs && window.adSetSongs({json});");
                 }
                 _ = Dispatcher.BeginInvoke(() =>
-                    SetStatus($"已识别 {found.Count} 首歌曲（共 {qqSongCache.Count} 首缓存）"));
+                    SetStatus(string.Format(Lang.F("已识别 {0} 首歌曲（共 {1} 首缓存）"), found.Count, qqSongCache.Count)));
             }
             catch (Exception ex)
             {
@@ -2077,11 +2077,11 @@ namespace AuralDesk
         {
             try
             {
-                SetStatus("捕获到 QQ 音乐音源，开始下载…");
+                SetStatus(Lang.T("捕获到 QQ 音乐音源，开始下载…"));
                 byte[] bytes = await DownloadAudioAsync(uri);
                 if (bytes.Length == 0)
                 {
-                    SetStatus("下载失败：响应为空");
+                    SetStatus(Lang.T("下载失败：响应为空"));
                     return;
                 }
                 string ext = DetectUrlExt(uri);
@@ -2093,7 +2093,7 @@ namespace AuralDesk
                     var dec = QmcDecoder.Decrypt(bytes, ext);
                     if (dec == null)
                     {
-                        SetStatus("解密失败：无法检测掩码（可能是新加密格式）");
+                        SetStatus(Lang.T("解密失败：无法检测掩码（可能是新加密格式）"));
                         return;
                     }
                     outData = dec.Value.data;
@@ -2111,7 +2111,7 @@ namespace AuralDesk
                 capturedSongCount++;
                 var file = Path.Combine(dir, $"QQ_{DateTime.Now:yyyyMMdd_HHmmss}_{capturedSongCount}.{outExt}");
                 await File.WriteAllBytesAsync(file, outData);
-                SetStatus($"已保存：{file}（{(outData.Length + 512) / 1024 / 1024}MB）");
+                SetStatus(string.Format(Lang.F("已保存：{0}（{1}MB）"), file, (outData.Length + 512) / 1024 / 1024));
 
                 if (UseHqOutput)
                 {
@@ -2123,23 +2123,23 @@ namespace AuralDesk
                         hqPlayRequestTime = DateTime.UtcNow;
                         isPlaying = true;
                         SyncPlayIcon();
-                        SetStatus($"HQPlayer 播放：{Path.GetFileName(file)}");
+                        SetStatus(string.Format(Lang.F("HQPlayer 播放：{0}"), Path.GetFileName(file)));
                     }
                     else
                     {
-                        SetStatus("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA");
+                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA"));
                     }
                 }
                 else if (OutputCombo.SelectedIndex == 0)
                 {
                     systemPlayer.Play(file);
                     SyncPlayIcon();
-                    SetStatus($"系统输出播放：{Path.GetFileName(file)}");
+                    SetStatus(string.Format(Lang.F("系统输出播放：{0}"), Path.GetFileName(file)));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("下载失败：" + ex.Message);
+                SetStatus(Lang.T("下载失败：") + ex.Message);
             }
         }
 
@@ -2303,7 +2303,7 @@ namespace AuralDesk
                 WindowState = WindowState.Maximized;
                 isFullScreen = true;
                 FullScreenBtn.Content = "\uE73F";
-                FullScreenBtn.ToolTip = "退出全屏";
+                FullScreenBtn.ToolTip = Lang.T("退出全屏");
             }
             else
             {
@@ -2325,7 +2325,7 @@ namespace AuralDesk
                 }
                 isFullScreen = false;
                 FullScreenBtn.Content = "\uE740";
-                FullScreenBtn.ToolTip = "全屏";
+                FullScreenBtn.ToolTip = Lang.T("全屏");
             }
         }
 
@@ -2390,7 +2390,7 @@ namespace AuralDesk
                 SetQqStatus(false, qqSidecar.Error ?? "QQ 音乐组件不可用");
                 return;
             }
-            SetQqStatus(false, "QQ 音乐组件启动中…");
+            SetQqStatus(false, Lang.T("QQ 音乐组件启动中…"));
             if (!await qqSidecar.EnsureStartedAsync())
             {
                 SetQqStatus(false, qqSidecar.Error ?? "QQ 音乐组件启动失败");
@@ -2409,7 +2409,7 @@ namespace AuralDesk
             else
             {
                 SetQqLoggedOut();
-                QqEmptyHint.Text = "未登录，登录后即可查看收藏、歌单与推荐";
+                QqEmptyHint.Text = Lang.T("未登录，登录后即可查看收藏、歌单与推荐");
                 QqEmptyHint.Visibility = Visibility.Visible;
             }
         }
@@ -2426,7 +2426,7 @@ namespace AuralDesk
         {
             QqLoginBtn.Visibility = Visibility.Collapsed;
             QqLogoutBtn.Visibility = Visibility.Visible;
-            SetQqStatus(true, $"已登录（{qqApi.Uin}）");
+            SetQqStatus(true, string.Format(Lang.F("已登录（{0}）"), qqApi.Uin));
             _ = LoadQqNicknameAsync();
             _ = RefreshFavSetAsync();
             _ = RefreshFavAlbumsSetAsync();
@@ -2436,7 +2436,7 @@ namespace AuralDesk
         {
             QqLoginBtn.Visibility = Visibility.Visible;
             QqLogoutBtn.Visibility = Visibility.Collapsed;
-            SetQqStatus(false, "未登录，点击右上角扫码登录");
+            SetQqStatus(false, Lang.T("未登录，点击右上角扫码登录"));
         }
 
         private async Task LoadQqNicknameAsync()
@@ -2446,7 +2446,7 @@ namespace AuralDesk
                 var name = await qqApi.GetNicknameAsync();
                 if (!string.IsNullOrEmpty(name))
                 {
-                    SetQqStatus(true, $"已登录：{name}");
+                    SetQqStatus(true, string.Format(Lang.F("已登录：{0}"), name));
                     QqStatusText.ToolTip = $"uin: {qqApi.Uin}";
                 }
             }
@@ -2484,14 +2484,14 @@ namespace AuralDesk
                 var qr = await qqApi.GetQrCodeAsync();
                 if (qr == null)
                 {
-                    SetQqStatus(false, "获取二维码失败");
+                    SetQqStatus(false, Lang.T("获取二维码失败"));
                     return;
                 }
                 var (identifier, imgDataUrl) = qr.Value;
                 var comma = imgDataUrl.IndexOf(',');
                 if (comma < 0)
                 {
-                    SetQqStatus(false, "二维码数据异常");
+                    SetQqStatus(false, Lang.T("二维码数据异常"));
                     return;
                 }
                 var base64 = imgDataUrl[(comma + 1)..];
@@ -2503,13 +2503,13 @@ namespace AuralDesk
                 bmp.EndInit();
                 bmp.Freeze();
                 QrImage.Source = bmp;
-                QrStatusText.Text = qqApi.QrLoginType == "wx" ? "请用微信扫码" : "请用 QQ 手机版扫码";
+                QrStatusText.Text = qqApi.QrLoginType == "wx" ? Lang.T("请用微信扫码") : Lang.T("请用 QQ 手机版扫码");
                 QrOverlay.Visibility = Visibility.Visible;
                 _ = PollQrAsync(identifier);
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "获取二维码失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("获取二维码失败：") + ex.Message);
             }
         }
 
@@ -2517,7 +2517,7 @@ namespace AuralDesk
         private void ApplyQrLoginType()
         {
             qqApi.QrLoginType = QrTypeWx.IsChecked == true ? "wx" : "qq";
-            QrTitleText.Text = qqApi.QrLoginType == "wx" ? "微信扫码登录" : "QQ 扫码登录";
+            QrTitleText.Text = qqApi.QrLoginType == "wx" ? Lang.T("微信扫码登录") : Lang.T("QQ 扫码登录");
         }
 
         /// <summary>登录弹窗内切换 QQ/微信：若弹窗已打开则立即重新获取对应二维码。</summary>
@@ -2527,20 +2527,20 @@ namespace AuralDesk
             ApplyQrLoginType();
             if (QrOverlay.Visibility != Visibility.Visible)
                 return;
-            QrStatusText.Text = "正在获取二维码…";
+            QrStatusText.Text = Lang.T("正在获取二维码…");
             try
             {
                 var qr = await qqApi.GetQrCodeAsync();
                 if (qr == null)
                 {
-                    QrStatusText.Text = "获取二维码失败";
+                    QrStatusText.Text = Lang.T("获取二维码失败");
                     return;
                 }
                 var (identifier, imgDataUrl) = qr.Value;
                 var comma = imgDataUrl.IndexOf(',');
                 if (comma < 0)
                 {
-                    QrStatusText.Text = "二维码数据异常";
+                    QrStatusText.Text = Lang.T("二维码数据异常");
                     return;
                 }
                 var base64 = imgDataUrl[(comma + 1)..];
@@ -2552,12 +2552,12 @@ namespace AuralDesk
                 bmp.EndInit();
                 bmp.Freeze();
                 QrImage.Source = bmp;
-                QrStatusText.Text = qqApi.QrLoginType == "wx" ? "请用微信扫码" : "请用 QQ 手机版扫码";
+                QrStatusText.Text = qqApi.QrLoginType == "wx" ? Lang.T("请用微信扫码") : Lang.T("请用 QQ 手机版扫码");
                 _ = PollQrAsync(identifier);
             }
             catch (Exception ex)
             {
-                QrStatusText.Text = "获取二维码失败：" + ex.Message;
+                QrStatusText.Text = Lang.T("获取二维码失败：") + ex.Message;
             }
         }
 
@@ -2577,19 +2577,19 @@ namespace AuralDesk
                         switch (ev)
                         {
                             case 1:
-                                QrStatusText.Text = "等待扫码…";
+                                QrStatusText.Text = Lang.T("等待扫码…");
                                 break;
                             case 2:
-                                QrStatusText.Text = "已扫码，请在手机上确认";
+                                QrStatusText.Text = Lang.T("已扫码，请在手机上确认");
                                 break;
                             case 3:
-                                QrStatusText.Text = "二维码已过期，请取消后重新获取";
+                                QrStatusText.Text = Lang.T("二维码已过期，请取消后重新获取");
                                 break;
                             case 4:
-                                QrStatusText.Text = "已拒绝，请取消后重新获取";
+                                QrStatusText.Text = Lang.T("已拒绝，请取消后重新获取");
                                 break;
                             case 0:
-                                QrStatusText.Text = "登录成功！";
+                                QrStatusText.Text = Lang.T("登录成功！");
                                 if (cred != null && qqApi.ApplyCredentialJson(cred))
                                 {
                                     QrOverlay.Visibility = Visibility.Collapsed;
@@ -2599,13 +2599,13 @@ namespace AuralDesk
                                         await LoadQqTabAsync(reset: true);
                                     return;
                                 }
-                                QrStatusText.Text = "登录失败：凭证解析异常";
+                                QrStatusText.Text = Lang.T("登录失败：凭证解析异常");
                                 break;
                         }
                     }
                     catch (Exception ex)
                     {
-                        QrStatusText.Text = "轮询异常：" + ex.Message;
+                        QrStatusText.Text = Lang.T("轮询异常：") + ex.Message;
                     }
                 }
             }
@@ -2662,7 +2662,7 @@ namespace AuralDesk
             QqHomeScroller.Visibility = Visibility.Visible;
             QqSongScroller.Visibility = Visibility.Collapsed;
             QqPlaylistScroller.Visibility = Visibility.Collapsed;
-            QqListTitle.Text = "主页";
+            QqListTitle.Text = Lang.T("主页");
             QqListCountText.Text = "";
             QqHomeBtn.Visibility = Visibility.Collapsed;
             UpdateRandomPlayVisibility();
@@ -2789,7 +2789,7 @@ namespace AuralDesk
                     QqSongScroller.Visibility = Visibility.Collapsed;
                     QqAlbumScroller.Visibility = Visibility.Visible;
                     QqBackToPlaylists.Visibility = Visibility.Collapsed;
-                    QqListTitle.Text = "收藏的专辑";
+                    QqListTitle.Text = Lang.T("收藏的专辑");
                     QqListCountText.Text = "";
                     await LoadQqFavAlbumsAsync();
                     break;
@@ -2815,7 +2815,7 @@ namespace AuralDesk
             qqSongs.Clear();
             qqShownMids.Clear();
             QqEmptyHint.Visibility = Visibility.Collapsed;
-            QqListTitle.Text = "猜你喜欢·沉浸刷歌";
+            QqListTitle.Text = Lang.T("猜你喜欢·沉浸刷歌");
             QqListCountText.Text = "";
             await LoadMoreRadarAsync();
         }
@@ -2836,15 +2836,15 @@ namespace AuralDesk
                     qqSongs.Add(song);
                     added++;
                 }
-                QqListCountText.Text = $"已加载 {qqSongs.Count} 首";
+                QqListCountText.Text = string.Format(Lang.F("已加载 {0} 首"), qqSongs.Count);
                 QqFilterBox.Text = "";
                 SyncQqSongsFull();
                 radarHasMore = true; // 猜你喜欢无限供应，始终可续
-                LogQqDebug($"猜你喜欢沉浸刷歌：新增 {added} 首，共 {qqSongs.Count} 首");
+                LogQqDebug(string.Format(Lang.F("猜你喜欢沉浸刷歌：新增 {0} 首，共 {1} 首"), added, qqSongs.Count));
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载沉浸刷歌失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载沉浸刷歌失败：") + ex.Message);
             }
             finally
             {
@@ -2859,15 +2859,15 @@ namespace AuralDesk
             qqSongs.Clear();
             qqShownMids.Clear();
             QqEmptyHint.Visibility = Visibility.Collapsed;
-            QqListTitle.Text = "每日30首";
-            QqListCountText.Text = "正在加载…";
+            QqListTitle.Text = Lang.T("每日30首");
+            QqListCountText.Text = Lang.T("正在加载…");
             try
             {
                 var euin = qqApi.EncryptUin;
                 if (string.IsNullOrEmpty(euin))
                 {
-                    SetQqStatus(false, "未登录，无法获取每日30首");
-                    QqListCountText.Text = "0 首";
+                    SetQqStatus(false, Lang.T("未登录，无法获取每日30首"));
+                    QqListCountText.Text = Lang.T("0 首");
                     return;
                 }
                 var data = await qqApi.GetDaily30Async(euin);
@@ -2880,12 +2880,12 @@ namespace AuralDesk
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载每日30首失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载每日30首失败：") + ex.Message);
             }
-            QqListCountText.Text = $"{qqSongs.Count} 首";
+            QqListCountText.Text = string.Format(Lang.F("{0} 首"), qqSongs.Count);
             if (qqSongs.Count == 0)
             {
-                QqEmptyHint.Text = "暂无推荐";
+                QqEmptyHint.Text = Lang.T("暂无推荐");
                 QqEmptyHint.Visibility = Visibility.Visible;
             }
         }
@@ -2904,11 +2904,11 @@ namespace AuralDesk
             }
             else
             {
-                SetStatus("正在加载整个歌单…");
+                SetStatus(Lang.T("正在加载整个歌单…"));
                 list = await LoadEntireQqListAsync();
                 if (list.Count == 0)
                 {
-                    SetStatus("歌单为空");
+                    SetStatus(Lang.T("歌单为空"));
                     return;
                 }
             }
@@ -2920,7 +2920,7 @@ namespace AuralDesk
             currentQueueIndex = 0;
             UpdateQueueEmptyHint();
             await PlayCurrentQueueAsync();
-            SetStatus($"随机播放（{queueTracks.Count} 首）");
+            SetStatus(string.Format(Lang.F("随机播放（{0} 首）"), queueTracks.Count));
         }
 
         /// <summary>随机播放按钮仅在歌曲列表视图下显示。</summary>
@@ -3011,7 +3011,7 @@ namespace AuralDesk
                     QqSongScroller.Visibility = Visibility.Visible;
                     QqHomeBtn.Visibility = Visibility.Visible;
                     QqListTitle.Text = hit.Title;
-                    QqListCountText.Text = "1 首";
+                    QqListCountText.Text = Lang.T("1 首");
                     UpdateRandomPlayVisibility();
                 }
                 return;
@@ -3031,7 +3031,7 @@ namespace AuralDesk
                 UpdateRandomPlayVisibility();
                 return;
             }
-            SetStatus("无法识别的链接");
+            SetStatus(Lang.T("无法识别的链接"));
         }
         private async void QqTab_Click(object sender, RoutedEventArgs e)
         {
@@ -3055,7 +3055,7 @@ namespace AuralDesk
                 qqShownMids.Clear();
             if (!qqApi.IsLoggedIn && qqTab != "search")
             {
-                QqEmptyHint.Text = "未登录，请先扫码登录";
+                QqEmptyHint.Text = Lang.T("未登录，请先扫码登录");
                 QqEmptyHint.Visibility = Visibility.Visible;
                 SetQqLoggedOut();
                 return;
@@ -3090,18 +3090,18 @@ namespace AuralDesk
                     qqSongs.Add(song);
                 qqPage = page;
                 qqHasMore = QqApiClient.HasMore(data);
-                QqListTitle.Text = "我的收藏";
+                QqListTitle.Text = Lang.T("我的收藏");
                 QqFilterBox.Text = "";
                 SyncQqSongsFull();
                 if (qqSongs.Count == 0)
                 {
-                    QqEmptyHint.Text = "收藏列表为空";
+                    QqEmptyHint.Text = Lang.T("收藏列表为空");
                     QqEmptyHint.Visibility = Visibility.Visible;
                 }
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载收藏失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载收藏失败：") + ex.Message);
             }
             finally
             {
@@ -3118,19 +3118,19 @@ namespace AuralDesk
                 qqPlaylists.Clear();
                 foreach (var playlist in list)
                     qqPlaylists.Add(playlist);
-                QqListTitle.Text = "我的歌单";
+                QqListTitle.Text = Lang.T("我的歌单");
                 QqPlaylistScroller.Visibility = Visibility.Visible;
                 QqSongScroller.Visibility = Visibility.Collapsed;
                 if (list.Count == 0)
                 {
-                    QqEmptyHint.Text = "还没有创建过歌单";
+                    QqEmptyHint.Text = Lang.T("还没有创建过歌单");
                     QqEmptyHint.Visibility = Visibility.Visible;
                 }
                 UpdateRandomPlayVisibility();
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载歌单失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载歌单失败：") + ex.Message);
             }
         }
 
@@ -3174,13 +3174,13 @@ namespace AuralDesk
                 SyncQqSongsFull();
                 if (qqSongs.Count == 0)
                 {
-                    QqEmptyHint.Text = "歌单为空";
+                    QqEmptyHint.Text = Lang.T("歌单为空");
                     QqEmptyHint.Visibility = Visibility.Visible;
                 }
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载歌单歌曲失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载歌单歌曲失败：") + ex.Message);
             }
             finally
             {
@@ -3228,18 +3228,18 @@ namespace AuralDesk
                     qqSongs.Add(song);
                 qqPage = page;
                 qqHasMore = songs.Count > 0;
-                QqListTitle.Text = $"搜索：{keyword}";
+                QqListTitle.Text = string.Format(Lang.F("搜索：{0}"), keyword);
                 QqFilterBox.Text = "";
                 SyncQqSongsFull();
                 if (qqSongs.Count == 0)
                 {
-                    QqEmptyHint.Text = "没有找到相关歌曲";
+                    QqEmptyHint.Text = Lang.T("没有找到相关歌曲");
                     QqEmptyHint.Visibility = Visibility.Visible;
                 }
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "搜索失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("搜索失败：") + ex.Message);
             }
             finally
             {
@@ -3316,7 +3316,7 @@ namespace AuralDesk
         {
             if (song.Id <= 0)
             {
-                SetStatus("该歌曲缺少 ID，无法收藏");
+                SetStatus(Lang.T("该歌曲缺少 ID，无法收藏"));
                 LogQqDebug("收藏失败: 歌曲缺少 ID " + song.Mid);
                 return;
             }
@@ -3331,11 +3331,11 @@ namespace AuralDesk
                   if (target) favMidSet.Add(song.Mid); else favMidSet.Remove(song.Mid);
                   ApplyFavStateToLists();
                   SetStatus(target ? $"已收藏：{song.Title}" : $"已取消收藏：{song.Title}");
-                  LogQqDebug($"收藏操作: {song.Title} id={song.Id} type={song.SongType} -> {target}");
+                  LogQqDebug(string.Format(Lang.F("收藏操作: {0} id={1} type={2} -> {3}"), song.Title, song.Id, song.SongType, target));
               }
               catch (Exception ex)
               {
-                  SetStatus("收藏操作失败：" + ex.Message);
+                  SetStatus(Lang.T("收藏操作失败：") + ex.Message);
                   LogQqDebug("收藏操作失败: " + ex);
               }
           }
@@ -3359,7 +3359,7 @@ namespace AuralDesk
             var songId = song?.Id > 0 ? song.Id : await qqApi.ResolveSongIdAsync(track.QqMid);
             if (songId <= 0)
             {
-                SetStatus("该歌曲缺少 ID，无法收藏");
+                SetStatus(Lang.T("该歌曲缺少 ID，无法收藏"));
                 LogQqDebug("收藏失败: 歌曲缺少 ID " + track.QqMid);
                 return;
             }
@@ -3374,11 +3374,11 @@ namespace AuralDesk
                 if (target) favMidSet.Add(track.QqMid); else favMidSet.Remove(track.QqMid);
                 ApplyFavStateToLists();
                 SetStatus(target ? $"已收藏：{track.Title}" : $"已取消收藏：{track.Title}");
-                LogQqDebug($"收藏操作(队列): {track.Title} id={songId} -> {target}");
+                LogQqDebug(string.Format(Lang.F("收藏操作(队列): {0} id={1} -> {2}"), track.Title, songId, target));
             }
             catch (Exception ex)
             {
-                SetStatus("收藏操作失败：" + ex.Message);
+                SetStatus(Lang.T("收藏操作失败：") + ex.Message);
                 LogQqDebug("收藏操作失败: " + ex);
             }
         }
@@ -3429,7 +3429,7 @@ namespace AuralDesk
         {
             if (album.AlbumId <= 0)
             {
-                SetStatus("该专辑缺少 ID，无法收藏");
+                SetStatus(Lang.T("该专辑缺少 ID，无法收藏"));
                 LogQqDebug("收藏专辑失败: 缺少专辑 ID " + album.AlbumMid);
                 return;
             }
@@ -3444,11 +3444,11 @@ namespace AuralDesk
                 if (target) favAlbumMidSet.Add(album.AlbumMid); else favAlbumMidSet.Remove(album.AlbumMid);
                 ApplyFavStateToAlbums();
                 SetStatus(target ? $"已收藏专辑：{album.Name}" : $"已取消收藏专辑：{album.Name}");
-                LogQqDebug($"收藏专辑操作: {album.Name} id={album.AlbumId} -> {target}");
+                LogQqDebug(string.Format(Lang.F("收藏专辑操作: {0} id={1} -> {2}"), album.Name, album.AlbumId, target));
             }
             catch (Exception ex)
             {
-                SetStatus("收藏专辑操作失败：" + ex.Message);
+                SetStatus(Lang.T("收藏专辑操作失败：") + ex.Message);
                 LogQqDebug("收藏专辑操作失败: " + ex);
             }
         }
@@ -3552,11 +3552,11 @@ namespace AuralDesk
                 ShowQqSearchTab(currentSearchTab);
                 ApplyFavStateToLists();
                 ApplyFavStateToAlbums();
-                SetQqStatus(true, $"搜索「{keyword}」完成");
+                SetQqStatus(true, string.Format(Lang.F("搜索「{0}」完成"), keyword));
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "在线搜索失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("在线搜索失败：") + ex.Message);
             }
             finally
             {
@@ -3702,7 +3702,7 @@ namespace AuralDesk
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载歌手歌曲失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载歌手歌曲失败：") + ex.Message);
             }
             finally
             {
@@ -3758,7 +3758,7 @@ namespace AuralDesk
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载歌手专辑失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载歌手专辑失败：") + ex.Message);
             }
             finally
             {
@@ -3887,16 +3887,16 @@ namespace AuralDesk
                 QqListTitle.Text = currentPlaylistName;
                 QqFilterBox.Text = "";
                 SyncQqSongsFull();
-                QqListCountText.Text = $"{qqSongs.Count} 首";
+                QqListCountText.Text = string.Format(Lang.F("{0} 首"), qqSongs.Count);
                 if (qqSongs.Count == 0)
                 {
-                    QqEmptyHint.Text = "专辑为空";
+                    QqEmptyHint.Text = Lang.T("专辑为空");
                     QqEmptyHint.Visibility = Visibility.Visible;
                 }
             }
             catch (Exception ex)
             {
-                SetQqStatus(false, "加载专辑失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载专辑失败：") + ex.Message);
             }
         }
 
@@ -3914,12 +3914,12 @@ namespace AuralDesk
                 foreach (var a in parsed)
                     qqAlbums.Add(a);
                 ApplyFavStateToAlbums();
-                QqListCountText.Text = $"{qqAlbums.Count} 张专辑";
+                QqListCountText.Text = string.Format(Lang.F("{0} 张专辑"), qqAlbums.Count);
             }
             catch (Exception ex)
             {
                 LogQqDebug("加载收藏专辑失败: " + ex.Message);
-                SetQqStatus(false, "加载收藏专辑失败：" + ex.Message);
+                SetQqStatus(false, Lang.T("加载收藏专辑失败：") + ex.Message);
             }
         }
 
@@ -4013,11 +4013,11 @@ namespace AuralDesk
             {
                 // 先用已加载列表建立临时队列，立即开始播放点击的歌（不等全量）
                 // 保持列表排序：直接加载整个歌单从头构建队列，播放定位到点击的歌
-                SetStatus("正在加载整个歌单…");
+                SetStatus(Lang.T("正在加载整个歌单…"));
                 var full = await LoadEntireQqListAsync();
                 if (full.Count == 0)
                 {
-                    SetStatus("歌单为空");
+                    SetStatus(Lang.T("歌单为空"));
                     return;
                 }
                 var hitIdx = full.FindIndex(s => s.Mid == song.Mid);
@@ -4077,12 +4077,12 @@ namespace AuralDesk
                     isPlaying = false;
                     SyncPlayIcon();
                     UpdateNowPlayingInfo(track.Title, track.Singer, track.Source);
-                    SetStatus($"正在加载：{track.Title}…");
+                    SetStatus(string.Format(Lang.F("正在加载：{0}…"), track.Title));
                     var result = await DownloadQqSongAsync(track.QqSong!, track);
                     if (gen != playGeneration) return; // 用户已切到其它曲目，丢弃本次下载结果
                     if (result == null)
                     {
-                        SetStatus($"下载失败，跳过：{track.Title}");
+                        SetStatus(string.Format(Lang.F("下载失败，跳过：{0}"), track.Title));
                         currentQueueIndex++;
                         await PlayCurrentQueueAsync();
                         return;
@@ -4093,7 +4093,7 @@ namespace AuralDesk
                     track = target;
                     track.Path = result.Value.File;
                     track.QualityName = result.Value.QualityName;
-                    track.Source = "QQ音乐 · " + track.QualityName;
+                    track.Source = Lang.T("QQ音乐 · ") + track.QualityName;
                     track.CacheState = "";
                     EnforceCacheLimit();
                 }
@@ -4142,7 +4142,7 @@ namespace AuralDesk
                     }
                 }
                 SetPlaying(false);
-                SetStatus("队列播放完毕");
+                SetStatus(Lang.T("队列播放完毕"));
                 return;
             }
             await PlayCurrentQueueAsync();
@@ -4171,7 +4171,7 @@ namespace AuralDesk
                     for (var i = oldCount; i < qqSongs.Count; i++)
                         queueTracks.Add(MakeQqTrack(qqSongs[i]));
                     playlistAutoExtend = qqTab == "radar" ? radarHasMore : qqHasMore;
-                    LogQqDebug($"队列续载 {qqSongs.Count - oldCount} 首，共 {queueTracks.Count} 首");
+                    LogQqDebug(string.Format(Lang.F("队列续载 {0} 首，共 {1} 首"), qqSongs.Count - oldCount, queueTracks.Count));
                 }
                 else
                 {
@@ -4192,7 +4192,7 @@ namespace AuralDesk
                 if (!IsPlayableAudioFile(track.Path) ||
                     (UseHqOutput && !IsHqPlayableAudioFile(track.Path)))
                 {
-                    SetStatus($"文件格式异常，跳过：{Path.GetFileName(track.Path)}");
+                    SetStatus(string.Format(Lang.F("文件格式异常，跳过：{0}"), Path.GetFileName(track.Path)));
                     LogQqDebug("非音频文件，跳过: " + track.Path);
                     _ = PlayNextQueueAsync();
                     return;
@@ -4201,7 +4201,7 @@ namespace AuralDesk
                 {
                     if (!await Task.Run(() => hqPlayer.PlayFile(track.Path)))
                     {
-                        SetStatus("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA");
+                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA"));
                         LogQqDebug("HQPlayer PlayFile 失败: " + track.Path);
                         _ = PlayNextQueueAsync();
                         return;
@@ -4230,7 +4230,7 @@ namespace AuralDesk
                 }
                 SetStatus(UseHqOutput
                     ? $"HQPlayer 播放：{Path.GetFileName(track.Path)}"
-                    : $"播放：{Path.GetFileName(track.Path)}");
+                    : string.Format(Lang.F("播放：{0}"), Path.GetFileName(track.Path)));
             }
             catch (Exception ex)
             {
@@ -4341,7 +4341,7 @@ namespace AuralDesk
             if (string.IsNullOrEmpty(t.QqMid) || idx == currentQueueIndex) return;
             if (!string.IsNullOrEmpty(t.Path) && File.Exists(t.Path))
             {
-                t.CacheState = "已缓存";
+                t.CacheState = Lang.T("已缓存");
             }
             else
             {
@@ -4350,7 +4350,7 @@ namespace AuralDesk
                 {
                     t.Path = cf;
                     ApplyCachedInfo(t, cf);
-                    t.CacheState = "已缓存";
+                    t.CacheState = Lang.T("已缓存");
                 }
             }
         }
@@ -4365,7 +4365,7 @@ namespace AuralDesk
             // 已有有效文件：标记为已缓存（供回退），不重复下载
             if (!string.IsNullOrEmpty(track.Path) && File.Exists(track.Path))
             {
-                track.CacheState = "已缓存";
+                track.CacheState = Lang.T("已缓存");
                 return;
             }
 
@@ -4376,11 +4376,11 @@ namespace AuralDesk
                 var t0 = queueTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.QqMid) && t.QqMid == track.QqMid) ?? track;
                 t0.Path = cachedFile;
                 ApplyCachedInfo(t0, cachedFile);
-                t0.CacheState = "已缓存";
+                t0.CacheState = Lang.T("已缓存");
                 return;
             }
 
-            LogQqDebug($"预缓存: {track.Title}");
+            LogQqDebug(string.Format(Lang.F("预缓存: {0}"), track.Title));
             var result = await DownloadQqSongAsync(track.QqSong!, track);
             if (result != null)
             {
@@ -4393,15 +4393,15 @@ namespace AuralDesk
                 {
                     target.Path = result.Value.File;
                     target.QualityName = result.Value.QualityName;
-                    target.Source = "QQ音乐 · " + target.QualityName;
-                    target.CacheState = "已缓存";
+                    target.Source = Lang.T("QQ音乐 · ") + target.QualityName;
+                    target.CacheState = Lang.T("已缓存");
                     EnforceCacheLimit();
-                    LogQqDebug($"预缓存完成: {Path.GetFileName(target.Path)}");
+                    LogQqDebug(string.Format(Lang.F("预缓存完成: {0}"), Path.GetFileName(target.Path)));
                 }
                 else
                 {
                     try { if (File.Exists(result.Value.File)) File.Delete(result.Value.File); } catch { }
-                    LogQqDebug($"预缓存已过时，删除: {Path.GetFileName(result.Value.File)}");
+                    LogQqDebug(string.Format(Lang.F("预缓存已过时，删除: {0}"), Path.GetFileName(result.Value.File)));
                 }
             }
         }
@@ -4419,12 +4419,12 @@ namespace AuralDesk
                 1 => (new[] { 7, 12, 13 }, new[] { "无损", "普通", "标准" }),
                 _ => (new[] { 12, 13 }, new[] { "普通", "标准" })
             };
-            LogQqDebug($"QQ 获取音源: {song.Title} / {song.Singer} / mid={song.Mid}");
+            LogQqDebug(string.Format(Lang.F("QQ 获取音源: {0} / {1} / mid={2}"), song.Title, song.Singer, song.Mid));
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 for (var i = 0; i < chain.Length; i++)
                 {
-                    SetStatus($"QQ 获取音源…（{song.Title}）");
+                    SetStatus(string.Format(Lang.F("QQ 获取音源…（{0}）"), song.Title));
                     SongUrlResult? urlInfo;
                     try
                     {
@@ -4432,18 +4432,18 @@ namespace AuralDesk
                     }
                     catch (Exception ex)
                     {
-                        LogQqDebug($"音质 {chainNames[i]} 获取异常: {ex.Message}");
+                        LogQqDebug(string.Format(Lang.F("音质 {0} 获取异常: {1}"), chainNames[i], ex.Message));
                         continue;
                     }
                     if (urlInfo == null)
                     {
-                        LogQqDebug($"音质 {chainNames[i]} 不可用，尝试下一档");
+                        LogQqDebug(string.Format(Lang.F("音质 {0} 不可用，尝试下一档"), chainNames[i]));
                         continue;
                     }
                     var result = await TryDownloadQualityAsync(song, urlInfo, chainNames[i], progressTrack);
                     if (result != null)
                         return result;
-                    LogQqDebug($"音质 {chainNames[i]} 下载失败，尝试下一档");
+                    LogQqDebug(string.Format(Lang.F("音质 {0} 下载失败，尝试下一档"), chainNames[i]));
                 }
                 if (!qqApi.IsLoggedIn)
                 {
@@ -4456,7 +4456,7 @@ namespace AuralDesk
                 if (!await qqApi.TryRefreshAsync())
                     break;
             }
-            LogQqDebug($"API 音源全部失败: {song.Mid}");
+            LogQqDebug(string.Format(Lang.F("API 音源全部失败: {0}"), song.Mid));
             if (progressTrack != null) HideQueueRowProgress(progressTrack);
             return null;
         }
@@ -4467,12 +4467,12 @@ namespace AuralDesk
         {
             try
             {
-                LogQqDebug($"API 音源: {urlInfo.Filename}");
+                LogQqDebug(string.Format(Lang.F("API 音源: {0}"), urlInfo.Filename));
                 var streamUrl = urlInfo.Purl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                     ? urlInfo.Purl
                     : "https://dl.stream.qqmusic.qq.com/" + urlInfo.Purl;
 
-                SetStatus($"QQ 下载中…（{song.Title}）");
+                SetStatus(string.Format(Lang.F("QQ 下载中…（{0}）"), song.Title));
                 if (progressTrack != null)
                     ShowQqRowProgress(song, 0);
                 if (progressTrack != null)
@@ -4520,7 +4520,7 @@ namespace AuralDesk
                     LogQqDebug("API 音频下载为空");
                     return null;
                 }
-                LogQqDebug($"下载完成: {bytes.Length} 字节");
+                LogQqDebug(string.Format(Lang.F("下载完成: {0} 字节"), bytes.Length));
                 lock (qqDownloadProgress) qqDownloadProgress.Remove(song.Mid);
                 if (progressTrack != null)
                     progressTrack.DownloadProgress = 1.0;
@@ -4530,7 +4530,7 @@ namespace AuralDesk
                     // 档位按实际音源判定：FLAC>48k=Hi-Res；FLAC≤48k=无损；MP3=普通（不依赖请求链）
                     qualityName = ClassifyQualityName(audioInfo, qualityName);
                     qualityName += " · " + audioInfo;
-                    LogQqDebug($"实际音质: {audioInfo}");
+                    LogQqDebug(string.Format(Lang.F("实际音质: {0}"), audioInfo));
                 }
                 if (progressTrack != null)
                 {
@@ -4582,7 +4582,7 @@ namespace AuralDesk
                             fs.Write(new byte[pad], 0, pad);
                             fs.Write(BitConverter.GetBytes(ekey.Length), 0, 4);
                         }
-                        LogQqDebug($"已拼接 ekey({ekey.Length} 字符)");
+                        LogQqDebug(string.Format(Lang.F("已拼接 ekey({0} 字符)"), ekey.Length));
                     }
                     var pyOut = await Task.Run(() => TryDecryptMflacPython(tmpMflac, tmpOutDir));
                     try { File.Delete(tmpMflac); } catch { }
@@ -4590,7 +4590,7 @@ namespace AuralDesk
                     {
                         bytes = await File.ReadAllBytesAsync(pyOut);
                         ext = "flac";
-                        LogQqDebug($"Python 解密成功: {Path.GetFileName(pyOut)} ({bytes.Length} 字节)");
+                        LogQqDebug(string.Format(Lang.F("Python 解密成功: {0} ({1} 字节)"), Path.GetFileName(pyOut), bytes.Length));
                         try { Directory.Delete(tmpOutDir, true); } catch { }
                     }
                     else
@@ -4613,7 +4613,7 @@ namespace AuralDesk
                     try { File.Delete(tmpOgg); } catch { }
                     if (converted)
                     {
-                        LogQqDebug($"OGG 已转 FLAC（HQPlayer 可播）: {Path.GetFileName(flacFile)}");
+                        LogQqDebug(string.Format(Lang.F("OGG 已转 FLAC（HQPlayer 可播）: {0}"), Path.GetFileName(flacFile)));
                         return (flacFile, qualityName);
                     }
                     LogQqDebug("OGG 转 FLAC 失败，保留原文件: " + song.Title);
@@ -4623,7 +4623,7 @@ namespace AuralDesk
                 }
                 var file = Path.Combine(CacheDir, $"{song.Mid}_{SanitizeFileName(song.Title)}.{ext}");
                 await File.WriteAllBytesAsync(file, bytes);
-                LogQqDebug($"已缓存: {file} ({bytes.Length} 字节)");
+                LogQqDebug(string.Format(Lang.F("已缓存: {0} ({1} 字节)"), file, bytes.Length));
                 return (file, qualityName);
             }
             catch (Exception ex)
@@ -4742,7 +4742,7 @@ namespace AuralDesk
                 if (!string.IsNullOrEmpty(info) && !track.Source.Contains(info))
                 {
                     track.QualityName = info;
-                    track.Source = "QQ音乐 · " + info;
+                    track.Source = Lang.T("QQ音乐 · ") + info;
                 }
             }
             catch { }
@@ -4824,7 +4824,7 @@ namespace AuralDesk
                         try
                         {
                             File.Delete(oldest);
-                            LogQqDebug($"缓存超数，删除: {Path.GetFileName(oldest)}");
+                            LogQqDebug(string.Format(Lang.F("缓存超数，删除: {0}"), Path.GetFileName(oldest)));
                         }
                         catch { }
                         continue;
@@ -4834,7 +4834,7 @@ namespace AuralDesk
                         var len = new FileInfo(f).Length;
                         File.Delete(f);
                         total -= len;
-                        LogQqDebug($"缓存超限，删除: {Path.GetFileName(f)}");
+                        LogQqDebug(string.Format(Lang.F("缓存超限，删除: {0}"), Path.GetFileName(f)));
                     }
                     catch { }
                 }
@@ -4867,7 +4867,7 @@ namespace AuralDesk
                     return all;
                 }
                 var pages = Math.Min((int)Math.Ceiling(total / (double)num), 16);
-                SetStatus($"正在加载整个歌单…（1/{pages}）");
+                SetStatus(string.Format(Lang.F("正在加载整个歌单…（1/{0}）"), pages));
                 var tasks = new List<Task<JsonElement>>();
                 for (var page = 2; page <= pages; page++)
                     tasks.Add(FetchQqPageAsync(page, num));
@@ -4875,12 +4875,12 @@ namespace AuralDesk
                 for (var i = 0; i < results.Length; i++)
                 {
                     all.AddRange(QqApiClient.ParseSongs(results[i]));
-                    SetStatus($"正在加载整个歌单…（{i + 2}/{pages}）");
+                    SetStatus(string.Format(Lang.F("正在加载整个歌单…（{0}/{1}）"), i + 2, pages));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("加载整个歌单失败：" + ex.Message);
+                SetStatus(Lang.T("加载整个歌单失败：") + ex.Message);
             }
             // 专辑接口返回倒序，整体反转恢复正序（与专辑列表展示一致）
             if (qqTab == "album")
@@ -5050,6 +5050,17 @@ namespace AuralDesk
             if (Application.Current is App app)
                 Lang.Apply(Lang.Resolve(settings), app); // replace language dictionary, DynamicResource texts refresh immediately
             UpdateRemoteStatusText();
+            RefreshLangBoundTexts();
+        }
+
+        /// <summary>语言切换后刷新由代码写入、且当前立即可推导的文本（其余随下一次状态更新/重绘生效）。</summary>
+        private void RefreshLangBoundTexts()
+        {
+            try
+            {
+                QueueEmptyHint.Text = queueTracks.Count == 0 ? Lang.T("（空）") : Lang.F("共 {0} 首", queueTracks.Count);
+            }
+            catch { }
         }
 
         private void UpdateIntervalCombo_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -5161,7 +5172,7 @@ namespace AuralDesk
                 {
                     CachePathBox.Text = dlg.FolderName;
                     SaveSettings();
-                    SetStatus("缓存目录已更新：" + dlg.FolderName);
+                    SetStatus(Lang.T("缓存目录已更新：") + dlg.FolderName);
                 }
             }
             catch (Exception ex)
@@ -5662,7 +5673,7 @@ namespace AuralDesk
                         {
                             hqIsPlaying = false;
                             SyncPlayIcon();
-                            SetStatus("HQPlayer 连接已断开");
+                            SetStatus(Lang.T("HQPlayer 连接已断开"));
                         }
                     }
                     return;
@@ -5751,7 +5762,7 @@ namespace AuralDesk
                     // 用户手动停止：保持停止，不自动接下一首
                     hqIsPlaying = false;
                     SyncPlayIcon();
-                    SetStatus("HQPlayer 已停止");
+                    SetStatus(Lang.T("HQPlayer 已停止"));
                 }
             }
             finally

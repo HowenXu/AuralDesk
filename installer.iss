@@ -1,6 +1,6 @@
 ; AuralDesk 安装脚本（Inno Setup 6）
 #define MyAppName "AuralDesk"
-#define MyAppVersion "0.1.38"
+#define MyAppVersion "0.1.39"
 #define MyAppExeName "AuralDesk.exe"
 #define MyLauncherExeName "AuralDesk.Launcher.exe"
 
