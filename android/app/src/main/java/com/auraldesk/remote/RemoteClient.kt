@@ -20,6 +20,7 @@ data class RemoteStatus(
     val title: String,
     val singer: String,
     val source: String,
+    val mid: String,
     val position: Double,
     val length: Double,
     val playing: Boolean
@@ -164,6 +165,7 @@ object RemoteClient {
                 title = optString(j, "Title", "title"),
                 singer = optString(j, "Singer", "singer"),
                 source = optString(j, "Source", "source"),
+                mid = optString(j, "Mid", "mid"),
                 position = optDouble(j, "Position", "position"),
                 length = optDouble(j, "Length", "length"),
                 playing = optBool(j, "Playing", "playing")

@@ -1286,7 +1286,22 @@
                                 <TextBlock Text="首" FontSize="11" Foreground="{StaticResource TextDimBrush}"
                                            VerticalAlignment="Center" Margin="6,0,0,0"/>
                             </WrapPanel>
-                            <Grid Margin="0,14,0,0">
+                                                        <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="提前缓存" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBox x:Name="PreCacheBox" Grid.Column="1" Width="48" Text="2"
+                                         TextChanged="PreCache_Changed" Style="{StaticResource TextBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="首下一首（连续切歌更顺）" FontSize="10.5"
+                                           Foreground="{StaticResource TextDimBrush}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+<Grid Margin="0,14,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>

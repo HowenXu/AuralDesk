@@ -33,6 +33,7 @@ class RemoteService : Service() {
         const val ACTION_PLAY = "com.auraldesk.remote.PLAY"
         const val ACTION_NEXT = "com.auraldesk.remote.NEXT"
         const val ACTION_PREV = "com.auraldesk.remote.PREV"
+        const val ACTION_FAV = "com.auraldesk.remote.FAV"
         const val EXTRA_URL = "url"
     }
 
@@ -41,6 +42,8 @@ class RemoteService : Service() {
     @Volatile private var polling = false
     private var lastTitle = ""
     private var lastSinger = ""
+    @Volatile
+    private var lastMid = ""
     private var lastLenMs = -1L
     private var lastPlaying = false
     private var pollCount = 0
@@ -98,6 +101,10 @@ class RemoteService : Service() {
             ACTION_PLAY -> thread { RemoteClient.control("toggle") }
             ACTION_NEXT -> thread { RemoteClient.control("next") }
             ACTION_PREV -> thread { RemoteClient.control("prev") }
+            ACTION_FAV -> thread {
+                if (lastMid.isNotEmpty())
+                    RemoteClient.qqAction(mapOf("action" to "toggleFav", "mid" to lastMid))
+            }
             else -> {
                 if (RemoteClient.baseUrl.isNotEmpty()) {
                     postNotification("未在播放", "", playing = false)
@@ -120,11 +127,12 @@ class RemoteService : Service() {
                     if (!polling) return@post
                     if (st != null) {
                         val lenMs = (st.length * 1000).toLong()
-                        val metaChanged = st.title != lastTitle || st.singer != lastSinger || lenMs != lastLenMs
+                        val metaChanged = st.title != lastTitle || st.singer != lastSinger || lenMs != lastLenMs || st.mid != lastMid
                         val playingChanged = st.playing != lastPlaying
                         if (metaChanged || playingChanged) {
                             lastTitle = st.title
                             lastSinger = st.singer
+                            lastMid = st.mid
                             lastLenMs = lenMs
                             lastPlaying = st.playing
                             session.setMetadata(buildMetadata(st))
@@ -208,6 +216,7 @@ class RemoteService : Service() {
                 actionIntent(ACTION_PLAY)
             )
             .addAction(android.R.drawable.ic_media_next, "下一首", actionIntent(ACTION_NEXT))
+            .addAction(R.drawable.ic_fav_notif, "收藏", actionIntent(ACTION_FAV))
         return builder.build()
     }
 

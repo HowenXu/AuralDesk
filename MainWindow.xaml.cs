@@ -695,6 +695,7 @@ namespace AuralDesk
             BufCount.IsChecked = settings.CacheCountMode == 1;
             BufCountValue.Text = settings.CacheCount.ToString();
             CachePathBox.Text = settings.ResolvedCachePath;
+            PreCacheBox.Text = settings.PrecacheCount.ToString();
             AutoStartCheck.IsChecked = settings.AutoStart;
             LyricOffsetBox.Text = settings.LyricOffsetMs.ToString();
 
@@ -982,6 +983,7 @@ namespace AuralDesk
                     Title = cur?.Title ?? "未在播放",
                     Singer = cur?.Singer ?? "",
                     Source = cur?.Source ?? "",
+                    Mid = cur?.QqMid ?? "",
                     Position = pos,
                     Length = len,
                     Playing = NowPlaying
@@ -3931,6 +3933,7 @@ namespace AuralDesk
 
 
         private int currentQueueIndex = -1;
+        private int playGeneration;   // 播放会话代际号：切歌后使旧的下载/播放回调失效
         private bool cacheBusy;
         private DateTime lastPlayStart = DateTime.MinValue;
         private bool playlistAutoExtend;
@@ -3978,6 +3981,7 @@ namespace AuralDesk
                         ordered.Add(s);
                 foreach (var s in ordered)
                     queueTracks.Add(MakeQqTrack(s));
+                currentQueueIndex = 0;
             }
             else if (qqTab == "radar" || qqTab == "daily30")
             {
@@ -3995,6 +3999,7 @@ namespace AuralDesk
                 }
                 foreach (var s in list)
                     queueTracks.Add(MakeQqTrack(s));
+                currentQueueIndex = 0;
             }
             else
             {
@@ -4012,8 +4017,6 @@ namespace AuralDesk
                     queueTracks.Add(MakeQqTrack(s));
                 currentQueueIndex = hitIdx >= 0 ? hitIdx : 0;
             }
-            ApplyFavStateToLists();
-            currentQueueIndex = 0;
             ApplyFavStateToLists();
             UpdateQueueEmptyHint();
             await PlayCurrentQueueAsync();
@@ -4035,6 +4038,7 @@ namespace AuralDesk
         /// <summary>播放队列当前项；QQ 项未下载时先下载到缓存目录。</summary>
         private async Task PlayCurrentQueueAsync()
         {
+            var gen = ++playGeneration; // 本代播放目标；后续切歌会递增，使本代过期的下载/播放回调失效
             if (currentQueueIndex < 0 || currentQueueIndex >= queueTracks.Count)
             {
                 SetPlaying(false);
@@ -4067,6 +4071,7 @@ namespace AuralDesk
                     UpdateNowPlayingInfo(track.Title, track.Singer, track.Source);
                     SetStatus($"正在加载：{track.Title}…");
                     var result = await DownloadQqSongAsync(track.QqSong!, track);
+                    if (gen != playGeneration) return; // 用户已切到其它曲目，丢弃本次下载结果
                     if (result == null)
                     {
                         SetStatus($"下载失败，跳过：{track.Title}");
@@ -4075,6 +4080,7 @@ namespace AuralDesk
                         return;
                     }
                     // 下载期间队列可能被后台全量重建，用 Mid 定位当前项
+                    if (gen != playGeneration) return;
                     var target = queueTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.QqMid) && t.QqMid == track.QqMid) ?? track;
                     track = target;
                     track.Path = result.Value.File;
@@ -4299,14 +4305,19 @@ namespace AuralDesk
             try
             {
                 var baseIdx = currentQueueIndex;
-                // 先快速打标：上一首/下一首只要有缓存文件就显示「已缓存待播放」
-                MarkCachedIfReady(baseIdx + 1);
+                var ahead = Math.Max(1, settings.PrecacheCount); // 提前缓存的下一首数量
+                // 先快速打标：接下来 ahead 首 + 上一首只要有缓存文件就显示「已缓存」
+                for (var k = 1; k <= ahead; k++) MarkCachedIfReady(baseIdx + k);
                 MarkCachedIfReady(baseIdx - 1);
-                // 再补下载缺失的：先下一首，播放未切换时再上一首
-                // 上一首/下一首并行缓存，互不等待
-                var tNext = CacheOneAsync(baseIdx + 1);
-                var tPrev = CacheOneAsync(baseIdx - 1);
-                await Task.WhenAll(tNext, tPrev);
+                // 补下载缺失的：按顺序先缓存 ahead 首下一首（串行避免抢占带宽），再缓存上一首；
+                // 期间用户切歌则中止（新的一次 CacheAdjacentTracksAsync 会重新规划）
+                for (var k = 1; k <= ahead; k++)
+                {
+                    await CacheOneAsync(baseIdx + k);
+                    if (currentQueueIndex != baseIdx) return;
+                }
+                if (currentQueueIndex == baseIdx)
+                    await CacheOneAsync(baseIdx - 1);
             }
             finally
             {
@@ -4314,7 +4325,7 @@ namespace AuralDesk
             }
         }
 
-        /// <summary>相邻项若已有缓存文件则直接打上「已缓存待播放」标记。</summary>
+        /// <summary>相邻项若已有缓存文件则直接打上「已缓存」标记。</summary>
         private void MarkCachedIfReady(int idx)
         {
             if (idx < 0 || idx >= queueTracks.Count) return;
@@ -4322,7 +4333,7 @@ namespace AuralDesk
             if (string.IsNullOrEmpty(t.QqMid) || idx == currentQueueIndex) return;
             if (!string.IsNullOrEmpty(t.Path) && File.Exists(t.Path))
             {
-                t.CacheState = "已缓存待播放";
+                t.CacheState = "已缓存";
             }
             else
             {
@@ -4331,7 +4342,7 @@ namespace AuralDesk
                 {
                     t.Path = cf;
                     ApplyCachedInfo(t, cf);
-                    t.CacheState = "已缓存待播放";
+                    t.CacheState = "已缓存";
                 }
             }
         }
@@ -4346,7 +4357,7 @@ namespace AuralDesk
             // 已有有效文件：标记为已缓存（供回退），不重复下载
             if (!string.IsNullOrEmpty(track.Path) && File.Exists(track.Path))
             {
-                track.CacheState = "已缓存待播放";
+                track.CacheState = "已缓存";
                 return;
             }
 
@@ -4357,7 +4368,7 @@ namespace AuralDesk
                 var t0 = queueTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.QqMid) && t.QqMid == track.QqMid) ?? track;
                 t0.Path = cachedFile;
                 ApplyCachedInfo(t0, cachedFile);
-                t0.CacheState = "已缓存待播放";
+                t0.CacheState = "已缓存";
                 return;
             }
 
@@ -4368,15 +4379,14 @@ namespace AuralDesk
                 var target = queueTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.QqMid) && t.QqMid == track.QqMid) ?? track;
                 var curIdx = queueTracks.IndexOf(target);
                 // 下载期间播放可能已推进：该歌不再位于当前/相邻位置则视为过时，删除文件
-                var near = curIdx == currentQueueIndex || curIdx == currentQueueIndex + 1
-                        || curIdx == currentQueueIndex - 1 || curIdx == currentQueueIndex + 2
-                        || curIdx == currentQueueIndex - 2;
+                var span = Math.Max(1, settings.PrecacheCount) + 1;
+                var near = curIdx == currentQueueIndex || Math.Abs(curIdx - currentQueueIndex) <= span;
                 if (near)
                 {
                     target.Path = result.Value.File;
                     target.QualityName = result.Value.QualityName;
                     target.Source = "QQ音乐 · " + target.QualityName;
-                    target.CacheState = "已缓存待播放";
+                    target.CacheState = "已缓存";
                     EnforceCacheLimit();
                     LogQqDebug($"预缓存完成: {Path.GetFileName(target.Path)}");
                 }
@@ -5020,6 +5030,17 @@ namespace AuralDesk
             var t = FindVisualChildByName(item, "DlTrack") as Grid;
             var fill = FindVisualChildByName(item, "DlFill") as Border;
             return (t, fill?.RenderTransform as ScaleTransform);
+        }
+
+        private void PreCache_Changed(object sender, TextChangedEventArgs e)
+        {
+            if (!loaded) return;
+            if (int.TryParse(PreCacheBox.Text.Trim(), out var n))
+            {
+                settings.PrecacheCount = Math.Clamp(n, 1, 8);
+                PreCacheBox.Text = settings.PrecacheCount.ToString();
+                SaveSettings();
+            }
         }
 
         private void CachePath_Changed(object sender, TextChangedEventArgs e)

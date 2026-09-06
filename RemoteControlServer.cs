@@ -17,6 +17,7 @@ namespace AuralDesk
         public string Title { get; set; } = "";
         public string Singer { get; set; } = "";
         public string Source { get; set; } = "";
+        public string Mid { get; set; } = "";   // 当前播放曲目的 QQ 音乐 mid（供收藏等操作）
         public double Position { get; set; }
         public double Length { get; set; }
         public bool Playing { get; set; }

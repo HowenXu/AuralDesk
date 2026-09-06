@@ -32,6 +32,7 @@ namespace AuralDesk
         public bool HqMissingShown { get; set; }        // HQPlayer 未安装提醒是否已展示过（仅弹一次）
         public bool AutoStart { get; set; }             // 开机自动启动
         public string? CachePath { get; set; }          // 缓存目录；空则默认 Documents\AuralDesk\cache
+        public int PrecacheCount { get; set; } = 2;     // 提前缓存当前曲之后的曲目数量
         public int CacheCountMode { get; set; }         // 0=按大小清理，1=按保留曲数清理
         public int CacheCount { get; set; } = 5;        // 按曲数清理时保留的歌曲数
         public List<SavedQueueItem>? SavedQueue { get; set; }
