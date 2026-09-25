@@ -4042,12 +4042,11 @@ namespace AuralDesk
                 LogQqDebug("收藏专辑解析: " + parsed.Count + " 张; 首张 Singer=[" +
                            (parsed.Count > 0 ? parsed[0].Singer : "空") + "] 日期=[" +
                            (parsed.Count > 0 ? parsed[0].Date : "空") + "]");
-                parsed.Sort(CompareAlbumsByDate);
-                // 排序结果留痕：首张应是最新发行，末张应是最旧，便于核对（收藏专辑接口只给 pubtime）
+                // 收藏专辑直接沿用 QQ 音乐自己的顺序（接口返回顺序 = 客户端「收藏时间倒序」），
+                // 不再按发行日期重排：用户要的是和 QQ 音乐客户端里看到的一致
                 if (parsed.Count > 0)
-                    LogQqDebug(string.Format("收藏专辑排序: {0}({1}) → {2}({3})",
-                        parsed[0].Name, parsed[0].Date,
-                        parsed[parsed.Count - 1].Name, parsed[parsed.Count - 1].Date));
+                    LogQqDebug(string.Format("收藏专辑顺序(QQ 原始顺序): {0} → {1}",
+                        parsed[0].Name, parsed[parsed.Count - 1].Name));
                 foreach (var a in parsed)
                     qqAlbums.Add(a);
                 ApplyFavStateToAlbums();
