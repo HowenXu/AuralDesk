@@ -12,6 +12,7 @@
     <sys:String x:Key="navStream">Stream</sys:String>
     <sys:String x:Key="outHqConfigureHint">Configure output &amp; upsampling in HQPlayer</sys:String>
     <sys:String x:Key="outNaa">NAA (HQPlayer)</sys:String>
+    <sys:String x:Key="outFoobar">foobar2000</sys:String>
     <sys:String x:Key="outSystemOutput">System output</sys:String>
     <sys:String x:Key="queueView">Play Queue</sys:String>
     <sys:String x:Key="settingsLang">Language</sys:String>

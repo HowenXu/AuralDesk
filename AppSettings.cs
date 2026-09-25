@@ -20,6 +20,7 @@ namespace AuralDesk
         public bool AutoStartHqPlayer { get; set; }      // 启动软件时自动启动 HQPlayer（默认关闭）
         public string? HqPlayerExePath { get; set; }     // HQPlayer 主程序路径（自选，空则探测常见路径）
         public bool RemoteControlEnabled { get; set; }   // 局域网遥控（默认关闭）
+        public int FoobarPort { get; set; } = 8880;      // foobar2000 beefweb 插件端口
         public bool ShowMem { get; set; } = true;
         public bool ShowCpu { get; set; } = true;
         public int ResumeMode { get; set; }             // 0=不保存 1=仅保存歌曲 2=歌曲+进度
