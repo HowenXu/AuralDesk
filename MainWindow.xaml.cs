@@ -4040,8 +4040,14 @@ namespace AuralDesk
                 qqAlbums.Clear();
                 var parsed = QqApiClient.ParseAlbums(data);
                 LogQqDebug("收藏专辑解析: " + parsed.Count + " 张; 首张 Singer=[" +
-                           (parsed.Count > 0 ? parsed[0].Singer : "空") + "]");
+                           (parsed.Count > 0 ? parsed[0].Singer : "空") + "] 日期=[" +
+                           (parsed.Count > 0 ? parsed[0].Date : "空") + "]");
                 parsed.Sort(CompareAlbumsByDate);
+                // 排序结果留痕：首张应是最新发行，末张应是最旧，便于核对（收藏专辑接口只给 pubtime）
+                if (parsed.Count > 0)
+                    LogQqDebug(string.Format("收藏专辑排序: {0}({1}) → {2}({3})",
+                        parsed[0].Name, parsed[0].Date,
+                        parsed[parsed.Count - 1].Name, parsed[parsed.Count - 1].Date));
                 foreach (var a in parsed)
                     qqAlbums.Add(a);
                 ApplyFavStateToAlbums();

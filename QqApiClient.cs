@@ -1068,7 +1068,7 @@ namespace AuralDesk
                         : 0,
                     Name = CleanSearchText(GetStr(item, "name") ?? GetStr(item, "title") ?? "未知专辑"),
                     Singer = CleanSearchText(singer),
-                    Date = GetStr(item, "publish_date") ?? GetStr(item, "time_public") ?? "",
+                    Date = ResolveAlbumDate(item),
                     CoverUrl = pic,
                     AlbumType = GetStr(item, "album_type") ?? ""
                 });
@@ -1120,6 +1120,35 @@ namespace AuralDesk
             el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
                 ? v.GetString()
                 : null;
+
+        /// <summary>
+        /// 专辑发行日期。各接口给的字段不一样：搜索/歌手专辑是 publish_date / time_public 字符串，
+        /// 收藏专辑只给 pubtime（Unix 秒）。注意 time_public 常常是空串，
+        /// 不能让空串把后面的回退路径挡住（否则日期全空，排序会退化成按专辑名排）。
+        /// </summary>
+        private static string ResolveAlbumDate(JsonElement item)
+        {
+            foreach (var key in new[] { "publish_date", "time_public", "publish_time" })
+            {
+                var text = GetStr(item, key);
+                if (!string.IsNullOrWhiteSpace(text)) return text!;
+            }
+            var pub = GetLong(item, "pubtime");
+            if (pub <= 0)
+            {
+                var raw = GetStr(item, "pubtime");
+                if (!string.IsNullOrWhiteSpace(raw)) long.TryParse(raw, out pub);
+            }
+            if (pub <= 0) return "";
+            try
+            {
+                return DateTimeOffset.FromUnixTimeSeconds(pub).LocalDateTime.ToString("yyyy-MM-dd");
+            }
+            catch
+            {
+                return "";
+            }
+        }
 
         private static int GetInt(JsonElement el, string name) =>
             el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number
