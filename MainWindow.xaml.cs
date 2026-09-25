@@ -69,6 +69,11 @@ namespace AuralDesk
         // 只能靠这两个残留值判断「是走到结尾停的」还是「用户手动停的」。
         private double fbLastPos;
         private double fbLastDuration;
+        // foobar2000 没有可用的播放位置接口（停止后立即清零），进度条改为本地自计时：
+        // 播放期间累加，暂停/停止冻结；每次轮询再用播放器回报的位置校准一次。
+        private TimeSpan fbClockBase = TimeSpan.Zero;
+        private DateTime fbClockStart = DateTime.MinValue;
+        private bool fbClockRunning;
         private DateTime lastFbPoll = DateTime.MinValue;
         private DateTime fbPlayRequestTime = DateTime.MinValue;
         private FoobarStatus? fbStatus;
@@ -362,6 +367,7 @@ namespace AuralDesk
             fbPrevState = "";
             fbLastPos = 0;
             fbLastDuration = 0;
+            FbClockReset();
             fbStatus = null;
             fbPlayRequestTime = DateTime.MinValue;
             hqPrevState = -1;
@@ -1006,7 +1012,7 @@ namespace AuralDesk
                 }
                 else if (UseFoobarOutput && fbStatus != null)
                 {
-                    pos = fbStatus.Position;
+                    pos = FbElapsedSeconds();
                     len = fbStatus.Duration > 0 ? fbStatus.Duration : totalDurationSeconds;
                 }
                 else if (systemPlayer.HasFile)
@@ -4126,50 +4132,44 @@ namespace AuralDesk
             lastPlayStart = DateTime.UtcNow;
             StopOutput();
 
-            queueTracks.Clear();
+            // 三种来源统一成同一条规则：队列就是这份列表本身的顺序，播放位置定位到点击的那首歌。
+            // 不能把点击的歌挪到队首，否则「下一首」会变成列表里的第一首，和用户看到的顺序对不上。
+            List<QqSongItem> source;
+            var needSort = false;
             if (pageList != null)
             {
-                var ordered = new List<QqSongItem> { song };
-                foreach (var s in pageList)
-                    if (s.Mid != song.Mid)
-                        ordered.Add(s);
-                foreach (var s in ordered)
-                    queueTracks.Add(MakeQqTrack(s));
-                currentQueueIndex = 0;
+                // 歌手页/搜索页：页面列表即队列（本身就是显示顺序）
+                source = new List<QqSongItem>(pageList);
             }
             else if (qqTab == "radar" || qqTab == "daily30")
             {
-                // 动态/每日列表即全量：点击的歌放队首，其余按列表顺序跟随
-                var list = new List<QqSongItem>(qqSongs);
-                var hitIdx = list.FindIndex(s => s.Mid == song.Mid);
-                if (hitIdx > 0)
-                {
-                    list.RemoveAt(hitIdx);
-                    list.Insert(0, song);
-                }
-                else if (hitIdx < 0)
-                {
-                    list.Insert(0, song);
-                }
-                foreach (var s in list)
-                    queueTracks.Add(MakeQqTrack(s));
-                currentQueueIndex = 0;
+                // 动态/每日列表即全量，已加载列表就是显示顺序
+                source = new List<QqSongItem>(qqSongs);
             }
             else
             {
-                // 先用已加载列表建立临时队列，立即开始播放点击的歌（不等全量）
-                // 保持列表排序：直接加载整个歌单从头构建队列，播放定位到点击的歌
                 SetStatus(Lang.T("正在加载整个歌单…"));
-                var full = await LoadEntireQqListAsync();
-                if (full.Count == 0)
+                source = await LoadEntireQqListAsync();
+                if (source.Count == 0)
                 {
                     SetStatus(Lang.T("歌单为空"));
                     return;
                 }
-                var hitIdx = full.FindIndex(s => s.Mid == song.Mid);
-                foreach (var s in full)
-                    queueTracks.Add(MakeQqTrack(s));
-                currentQueueIndex = hitIdx >= 0 ? hitIdx : 0;
+                // 全量列表是重新分页拉来的接口顺序，必须套用和显示列表一样的排序，
+                // 否则用户按歌名/时长排过序后，队列顺序和屏幕上看到的完全不是一回事
+                needSort = true;
+            }
+            if (source.All(s => s.Mid != song.Mid)) source.Insert(0, song);
+            if (needSort) ApplyQqSort(source, CurrentQqSortKey());
+
+            queueTracks.Clear();
+            foreach (var s in source) queueTracks.Add(MakeQqTrack(s));
+            currentQueueIndex = 0;
+            for (var i = 0; i < queueTracks.Count; i++)
+            {
+                if (queueTracks[i].QqMid != song.Mid) continue;
+                currentQueueIndex = i;
+                break;
             }
             ApplyFavStateToLists();
             UpdateQueueEmptyHint();
@@ -5083,37 +5083,39 @@ namespace AuralDesk
             QqListCountText.Text = qqListTotal > 0 ? $"共 {qqListTotal} 首" : "";
         }
 
+        /// <summary>当前流媒体列表的排序方式（ComboBoxItem 的 Tag），没有选中时按接口顺序处理。</summary>
+        private string CurrentQqSortKey() =>
+            QqSortCombo?.SelectedItem is ComboBoxItem item && item.Tag is string key ? key : "default";
+
+        /// <summary>
+        /// 按排序键重排列表。显示列表和播放队列共用这一套规则，两边顺序才会一致；
+        /// 用 OrderBy 而不是 List.Sort，因为 OrderBy 是稳定排序，同键项的相对顺序不会变。
+        /// </summary>
+        private static void ApplyQqSort(IList<QqSongItem> list, string key)
+        {
+            IEnumerable<QqSongItem> sorted = key switch
+            {
+                "title" => list.OrderBy(s => s.Title, StringComparer.CurrentCultureIgnoreCase),
+                "singer" => list.OrderBy(s => s.Singer, StringComparer.CurrentCultureIgnoreCase),
+                "duration" => list.OrderBy(s => ParseDuration(s.Duration)),
+                "album" => list.OrderBy(s => s.Album, StringComparer.CurrentCultureIgnoreCase),
+                _ => list
+            };
+            var ordered = sorted.ToList();
+            list.Clear();
+            foreach (var s in ordered) list.Add(s);
+        }
+
         private void QqSort_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (!loaded) return;
-            if (QqSortCombo.SelectedItem is not ComboBoxItem item || item.Tag is not string key)
-                return;
+            var key = CurrentQqSortKey();
             if (key == "default")
             {
                 // 默认 = 接口顺序（收藏即按添加时间倒序）
                 return;
             }
-            var list = qqSongs.ToList();
-            switch (key)
-            {
-                case "title":
-                    list.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase));
-                    break;
-                case "singer":
-                    list.Sort((a, b) => string.Compare(a.Singer, b.Singer, StringComparison.CurrentCultureIgnoreCase));
-                    break;
-                case "duration":
-                    list.Sort((a, b) => ParseDuration(a.Duration).CompareTo(ParseDuration(b.Duration)));
-                    break;
-                case "album":
-                    list.Sort((a, b) => string.Compare(a.Album, b.Album, StringComparison.CurrentCultureIgnoreCase));
-                    break;
-                default:
-                    return;
-            }
-            qqSongs.Clear();
-            foreach (var s in list)
-                qqSongs.Add(s);
+            ApplyQqSort(qqSongs, key);
         }
 
         private static double ParseDuration(string d)
@@ -5832,6 +5834,7 @@ namespace AuralDesk
                     {
                         fbIsPlaying = false;
                         fbHadPlayed = false;
+                        FbClockSetRunning(false);
                         SyncPlayIcon();
                         SetStatus(Lang.T("foobar2000 连接已断开"));
                     }
@@ -5843,11 +5846,13 @@ namespace AuralDesk
                 fbStatus = status;
                 if (status.Duration > 1) fbLastDuration = status.Duration;
                 if (status.IsPlaying) fbLastPos = status.Position;
+                FbClockSetRunning(status.IsPlaying);
+                if (status.IsPlaying) FbClockResync(status.Position);
                 // 进度与歌词由本方法驱动（HQPlayer 那条是同理由 HqPollAsync 自己驱动的）
                 if (status.IsPlaying || status.IsPaused)
                 {
                     UpdateProgressUi();
-                    SyncActiveLyric(TimeSpan.FromSeconds(status.Position));
+                    SyncActiveLyric(TimeSpan.FromSeconds(FbElapsedSeconds()));
                 }
                 if (fbIsPlaying != status.IsPlaying)
                 {
@@ -5943,9 +5948,54 @@ namespace AuralDesk
             fbPrevState = "";
             fbLastPos = 0;
             fbLastDuration = 0;
+            FbClockReset();
             lastFbPoll = DateTime.MinValue;
             fbPlayRequestTime = DateTime.UtcNow;
             return true;
+        }
+
+        /// <summary>foobar2000 的自计时播放位置：播放期间本地累加，暂停或停止时冻结在原处。</summary>
+        private double FbElapsedSeconds()
+        {
+            var t = fbClockBase;
+            if (fbClockRunning) t += DateTime.UtcNow - fbClockStart;
+            return Math.Max(0, t.TotalSeconds);
+        }
+
+        private void FbClockSetRunning(bool running)
+        {
+            if (running == fbClockRunning) return;
+            if (running)
+            {
+                fbClockStart = DateTime.UtcNow;
+                fbClockRunning = true;
+            }
+            else
+            {
+                fbClockBase += DateTime.UtcNow - fbClockStart;
+                fbClockRunning = false;
+            }
+        }
+
+        /// <summary>
+        /// 用播放器回报的位置校准自计时。本地时钟是按下播放后才开始累加的，
+        /// 会带上「轮询延迟 + 输出缓冲」的固定滞后，这里按差值补回来；
+        /// 差值很小时不动，避免每次轮询都把进度条拽一下。
+        /// </summary>
+        private void FbClockResync(double remotePosition)
+        {
+            if (!fbClockRunning || remotePosition <= 0) return;
+            var drift = remotePosition - FbElapsedSeconds();
+            if (Math.Abs(drift) < 0.4) return;
+            fbClockBase = TimeSpan.FromSeconds(remotePosition);
+            fbClockStart = DateTime.UtcNow;
+        }
+
+        private void FbClockReset()
+        {
+            fbClockBase = TimeSpan.Zero;
+            fbClockStart = DateTime.MinValue;
+            fbClockRunning = false;
         }
 
         /// <summary>HQPlayer 输出：轮询控制协议，驱动进度/歌词并检测自然播完。</summary>
@@ -6099,7 +6149,13 @@ namespace AuralDesk
         private void UpdateProgressUi()
         {
             double pos, total;
-            if (!UseHqOutput && systemPlayer.HasFile && systemPlayer.Length.TotalSeconds > 0)
+            if (UseFoobarOutput)
+            {
+                // foobar2000 只回报离散状态，位置由本地自计时提供；时长优先用文件真实时长
+                pos = FbElapsedSeconds();
+                total = fbStatus != null && fbStatus.Duration > 1 ? fbStatus.Duration : totalDurationSeconds;
+            }
+            else if (!UseHqOutput && systemPlayer.HasFile && systemPlayer.Length.TotalSeconds > 0)
             {
                 pos = systemPlayer.Position.TotalSeconds;
                 total = systemPlayer.Length.TotalSeconds;
