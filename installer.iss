@@ -1,6 +1,6 @@
-; AuralDesk 安装脚本（Inno Setup 6）
+﻿; AuralDesk 安装脚本（Inno Setup 6）
 #define MyAppName "AuralDesk"
-#define MyAppVersion "0.1.40"
+#define MyAppVersion "0.1.41"
 #define MyAppExeName "AuralDesk.exe"
 #define MyLauncherExeName "AuralDesk.Launcher.exe"
 
@@ -29,6 +29,9 @@ Name: "{app}\qqapi\app\web\data"; Permissions: users-modify
 
 [Files]
 Source: "release\AuralDesk\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; 单文件发布仍需 native loader；此前漏打包，全新安装会启不来 WebView2
+Source: "release\AuralDesk\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "release\AuralDesk\runtimes\*"; DestDir: "{app}\runtimes"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "qq_inject.js"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AuralDesk.Launcher\bin\Release\net48\{#MyLauncherExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AuralDesk.Launcher\bin\Release\net48\{#MyLauncherExeName}.config"; DestDir: "{app}"; Flags: ignoreversion
