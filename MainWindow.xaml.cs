@@ -63,7 +63,12 @@ namespace AuralDesk
         private readonly FoobarClient foobar = new();
         private bool fbPolling;
         private bool fbIsPlaying;
+        private bool fbHadPlayed;
         private string fbPrevState = "";
+        // 播放期间最后一次观测到的位置/时长：beefweb 在播放结束后会把 position/duration 清零，
+        // 只能靠这两个残留值判断「是走到结尾停的」还是「用户手动停的」。
+        private double fbLastPos;
+        private double fbLastDuration;
         private DateTime lastFbPoll = DateTime.MinValue;
         private DateTime fbPlayRequestTime = DateTime.MinValue;
         private FoobarStatus? fbStatus;
@@ -353,7 +358,10 @@ namespace AuralDesk
             try { systemPlayer.Stop(); } catch { }
             try { if (foobar.Connected) foobar.Stop(); } catch { }
             fbIsPlaying = false;
+            fbHadPlayed = false;
             fbPrevState = "";
+            fbLastPos = 0;
+            fbLastDuration = 0;
             fbStatus = null;
             fbPlayRequestTime = DateTime.MinValue;
             hqPrevState = -1;
@@ -1838,7 +1846,25 @@ namespace AuralDesk
                 }
                 else if (UseFoobarOutput)
                 {
-                    await PlayViaFoobarAsync(file);
+                    if (await PlayViaFoobarAsync(file))
+                    {
+                        var title = string.IsNullOrEmpty(songname)
+                            ? Path.GetFileNameWithoutExtension(file)
+                            : songname;
+                        isPlaying = true;
+                        SyncPlayIcon();
+                        UpdateNowPlayingInfo(title, singer, Lang.T("QQ音乐 · ") + quality.ToUpperInvariant());
+                        ShowNoLyrics();
+                        SetStatus(string.Format(Lang.F("foobar2000 播放：{0}"), Path.GetFileName(file)));
+                        AddToQueue(new QueueTrack
+                        {
+                            Title = title,
+                            Singer = singer,
+                            Source = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant(),
+                            Path = file,
+                            IsCurrent = true
+                        });
+                    }
                 }
                 else if (OutputCombo.SelectedIndex == 0)
                 {
@@ -5739,12 +5765,6 @@ namespace AuralDesk
                 return;
             }
             // 真实音频文件播放：进度完全由播放器驱动，不走演示时钟
-            if (UseFoobarOutput)
-            {
-                UpdateProgressUi();
-                if (fbStatus != null) SyncActiveLyric(TimeSpan.FromSeconds(fbStatus.Position));
-                return;
-            }
             if (systemPlayer.HasFile)
             {
                 UpdateProgressUi();
@@ -5811,15 +5831,24 @@ namespace AuralDesk
                     if (fbFailCount >= 2 && fbIsPlaying)
                     {
                         fbIsPlaying = false;
+                        fbHadPlayed = false;
                         SyncPlayIcon();
                         SetStatus(Lang.T("foobar2000 连接已断开"));
                     }
                     return;
                 }
                 fbFailCount = 0;
-                var wasPlaying = fbPrevState == "playing";
+                var prevState = fbPrevState;
                 fbPrevState = status.State;
                 fbStatus = status;
+                if (status.Duration > 1) fbLastDuration = status.Duration;
+                if (status.IsPlaying) fbLastPos = status.Position;
+                // 进度与歌词由本方法驱动（HQPlayer 那条是同理由 HqPollAsync 自己驱动的）
+                if (status.IsPlaying || status.IsPaused)
+                {
+                    UpdateProgressUi();
+                    SyncActiveLyric(TimeSpan.FromSeconds(status.Position));
+                }
                 if (fbIsPlaying != status.IsPlaying)
                 {
                     fbIsPlaying = status.IsPlaying;
@@ -5837,13 +5866,32 @@ namespace AuralDesk
                 if (status.IsPlaying)
                 {
                     fbPlayRequestTime = DateTime.MinValue;
+                    fbHadPlayed = true;
                     return;
                 }
-                // 自然播完：上一轮还在播、这一轮停了；或暂停且已到文件末尾
-                var ended = wasPlaying || (status.IsPaused && status.Duration > 1 &&
-                                           status.Position >= status.Duration - 0.5);
+                // 自然播完：必须是「确实播放过」之后状态变成 stopped，或暂停但已走到文件末尾。
+                // 绝不能把「用户按暂停」当成播完，否则一暂停就跳下一首、队列一路抢跑。
+                var ended = false;
+                if (fbHadPlayed)
+                {
+                    if (status.State == "stopped")
+                    {
+                        // 播完后 position/duration 归零，用播放期间的残留值判断是否真的走到结尾；
+                        // 用户在 foobar 里手动按停止（位置还在中段）时不自动跳曲，跟随播放器停在原处。
+                        var nearEnd = fbLastDuration > 1 && fbLastPos >= fbLastDuration - 2.0;
+                        ended = fbLastDuration <= 1 || nearEnd;
+                        // 只在状态刚变成 stopped 的那一次记日志，避免轮询刷屏
+                        if (prevState != "stopped")
+                            LogQqDebug(string.Format(
+                                "foobar2000 停止：lastPos={0:F1} lastDur={1:F1} → {2}",
+                                fbLastPos, fbLastDuration, ended ? "播完切歌" : "手动停止，保持当前曲"));
+                    }
+                    else if (status.IsPaused && status.Duration > 1 &&
+                             status.Position >= status.Duration - 0.5) ended = true;
+                }
                 if (ended && fbPlayRequestTime == DateTime.MinValue)
                 {
+                    fbHadPlayed = false;
                     fbStatus = null;
                     _ = PlayNextQueueAsync();
                 }
@@ -5891,7 +5939,10 @@ namespace AuralDesk
                 return false;
             }
             fbIsPlaying = true;
+            fbHadPlayed = false;
             fbPrevState = "";
+            fbLastPos = 0;
+            fbLastDuration = 0;
             lastFbPoll = DateTime.MinValue;
             fbPlayRequestTime = DateTime.UtcNow;
             return true;

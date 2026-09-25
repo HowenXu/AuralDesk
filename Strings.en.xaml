@@ -259,4 +259,8 @@
     <sys:String x:Key="共 {0} 首">{0} songs in total</sys:String>
     <sys:String x:Key="暂无内容，登录后即可查看收藏与歌单">Nothing here yet - log in to see favorites &amp; playlists</sys:String>
     <sys:String x:Key="（空）">(empty)</sys:String>
+    <sys:String x:Key="foobar2000 播放：{0}">Playing via foobar2000: {0}</sys:String>
+    <sys:String x:Key="foobar2000 连接已断开">foobar2000 connection lost</sys:String>
+    <sys:String x:Key="foobar2000 播放失败：请确认 foobar2000 已启动并安装 beefweb 插件">foobar2000 playback failed - make sure foobar2000 is running with the beefweb component installed</sys:String>
+    <sys:String x:Key="已把缓存目录加入 beefweb 白名单，请重启 foobar2000 后重试">Cache folder added to the beefweb whitelist - restart foobar2000 and try again</sys:String>
 </ResourceDictionary>
