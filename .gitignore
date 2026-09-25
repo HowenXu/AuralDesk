@@ -37,3 +37,11 @@ android/.idea/
 *.zip
 .vs/
 Thumbs.db
+
+# Signing material - never commit these
+android/keystore.properties
+android/release.keystore
+*.jks
+*.keystore
+*.p12
+*.pfx
