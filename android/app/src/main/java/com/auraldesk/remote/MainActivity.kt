@@ -616,18 +616,26 @@ class MainActivity : Activity() {
             setBackgroundColor(card)
         }
         val metaRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            // 歌名与歌手各占一行且都限一行：交响乐那种长歌名 + 多创作者
+            // 曾把底部控制区撑高到把播放键挤出屏幕
+            orientation = LinearLayout.VERTICAL
         }
         nowTitle = TextView(this).apply {
             textSize = 14f
             setTextColor(txt)
             setTypeface(null, android.graphics.Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         nowMeta = TextView(this).apply {
             textSize = 11f
             setTextColor(dim)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         metaRow.addView(nowTitle)
         metaRow.addView(nowMeta)
@@ -788,7 +796,8 @@ class MainActivity : Activity() {
         queueTitleText.text = if (qt > 0) getString(R.string.queue_count, qt) else getString(R.string.tab_queue)
         nowTitle.text = st.optString("curTitle", getString(R.string.not_playing))
         val singer = st.optString("curSinger", "")
-        nowMeta.text = if (singer.isEmpty()) "" else " - $singer"
+        nowMeta.text = singer
+        nowMeta.visibility = if (singer.isEmpty()) View.GONE else View.VISIBLE
         val playing = st.optBoolean("playing", false)
         playBtn.setImageResource(if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
         val len = st.optDouble("length", 0.0)
@@ -1113,6 +1122,7 @@ class MainActivity : Activity() {
                                     "daily30" -> "daily30"
                                     "fav" -> "fav"
                                     "favalbums" -> "favAlbums"
+                                    "songlists" -> "songlists"
                                     else -> "playlists"
                                 }
                         )

@@ -36,6 +36,7 @@ namespace AuralDesk
         private double lastHqPosition = -1;
         private DateTime lastHqMoveTime = DateTime.MinValue;
         private DateTime hqPlayRequestTime = DateTime.MinValue;
+        private bool hqAwaitStart;   // 已把文件交给 HQPlayer、正在等它真正起播
         private readonly HqPlayerClient hqPlayer;
         private readonly DispatcherTimer statsTimer;
         private ulong lastIdleTicks;
@@ -339,6 +340,9 @@ namespace AuralDesk
             try { systemPlayer.Stop(); } catch { }
             hqPrevState = -1;
             hqIsPlaying = false;
+            // 主动停下时清掉起播看门狗：切歌后还要下载，不能被上一轮的时间戳带着往前走
+            hqAwaitStart = false;
+            hqPlayRequestTime = DateTime.MinValue;
             if (hqPlayer.Connected)
             {
                 try { hqPlayer.Stop(); } catch { }
@@ -1239,6 +1243,10 @@ namespace AuralDesk
                             _ = ShowQqHomeAsync();
                             break;
                         case "playlists":
+                        case "songlists":
+                            // 手机端「账户下的歌单」：确保电脑端先切到流媒体页，再打开歌单列表
+                            ShowView("stream");
+                            QqEmptyHint.Visibility = Visibility.Collapsed;
                             _ = LoadQqPlaylistsAsync();
                             break;
                         case "openPlaylist":
@@ -1382,19 +1390,7 @@ namespace AuralDesk
                             if (r.TryGetProperty("mid", out var favMidEl))
                             {
                                 var favMid = favMidEl.GetString() ?? "";
-                                var favSong = qqSongs.FirstOrDefault(s => s.Mid == favMid);
-                                if (favSong == null)
-                                    favSong = qqSearchSongs.FirstOrDefault(s => s.Mid == favMid);
-                                if (favSong == null)
-                                    favSong = qqSingerSongs.FirstOrDefault(s => s.Mid == favMid);
-                                if (favSong != null)
-                                    _ = ToggleFavAsync(favSong);
-                                else
-                                {
-                                    var favTrack = queueTracks.FirstOrDefault(t => t.QqMid == favMid);
-                                    if (favTrack != null)
-                                        _ = ToggleQueueFavAsync(favTrack);
-                                }
+                                _ = ToggleFavByMidAsync(favMid);
                             }
                             break;
                         case "toggleFavAlbum":
@@ -1778,6 +1774,7 @@ namespace AuralDesk
                     hqPrevState = -1;
                     lastHqPoll = DateTime.MinValue;
                     hqPlayRequestTime = DateTime.UtcNow;
+                    hqAwaitStart = true;
                     isPlaying = true;
                     SyncPlayIcon();
                     var title = string.IsNullOrEmpty(songname)
@@ -2121,6 +2118,7 @@ namespace AuralDesk
                         hqPrevState = -1;
                         lastHqPoll = DateTime.MinValue;
                         hqPlayRequestTime = DateTime.UtcNow;
+                        hqAwaitStart = true;
                         isPlaying = true;
                         SyncPlayIcon();
                         SetStatus(string.Format(Lang.F("HQPlayer 播放：{0}"), Path.GetFileName(file)));
@@ -3087,7 +3085,12 @@ namespace AuralDesk
                 if (reset)
                     qqSongs.Clear();
                 foreach (var song in songs)
+                {
+                    // 收藏列表里的歌必然是已收藏：先补进集合，避免集合同步前红心显示成空心
+                    song.IsFav = true;
+                    favMidSet.Add(song.Mid);
                     qqSongs.Add(song);
+                }
                 qqPage = page;
                 qqHasMore = QqApiClient.HasMore(data);
                 QqListTitle.Text = Lang.T("我的收藏");
@@ -3119,8 +3122,17 @@ namespace AuralDesk
                 foreach (var playlist in list)
                     qqPlaylists.Add(playlist);
                 QqListTitle.Text = Lang.T("我的歌单");
+                // 歌单列表是二级页面：必须收起主页/专辑/歌手/搜索层，
+                // 否则各 ScrollViewer 同处一个 Grid 会叠在一起（远控「账户下的歌单」尤为明显）
+                QqHomeScroller.Visibility = Visibility.Collapsed;
+                QqAlbumScroller.Visibility = Visibility.Collapsed;
+                QqSingerView.Visibility = Visibility.Collapsed;
+                QqSearchOverlay.Visibility = Visibility.Collapsed;
+                QqBackToPlaylists.Visibility = Visibility.Collapsed;
                 QqPlaylistScroller.Visibility = Visibility.Visible;
                 QqSongScroller.Visibility = Visibility.Collapsed;
+                qqTab = "playlists";
+                qqBackTarget = "home";
                 if (list.Count == 0)
                 {
                     QqEmptyHint.Text = Lang.T("还没有创建过歌单");
@@ -3270,13 +3282,15 @@ namespace AuralDesk
             try
             {
                 var mids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (var page = 1; page <= 8; page++)
+                // QQ 的 CgiGetDiss 对 song_num 有上限，请求 100 也可能只回 30，
+                // 必须用 hasmore 判断翻页，否则收藏集合被截断（红心状态错乱、已收藏的歌被判成未收藏）
+                for (var page = 1; page <= 200; page++)
                 {
-                    var data = await qqApi.GetFavSongsAsync(page, 100);
+                    var data = await qqApi.GetFavSongsAsync(page, 30);
                     var list = QqApiClient.ParseSongs(data);
                     foreach (var s in list)
                         mids.Add(s.Mid);
-                    if (list.Count < 100)
+                    if (list.Count == 0 || !QqApiClient.HasMore(data))
                         break;
                 }
                 favMidSet.Clear();
@@ -3375,6 +3389,54 @@ namespace AuralDesk
                 ApplyFavStateToLists();
                 SetStatus(target ? $"已收藏：{track.Title}" : $"已取消收藏：{track.Title}");
                 LogQqDebug(string.Format(Lang.F("收藏操作(队列): {0} id={1} -> {2}"), track.Title, songId, target));
+            }
+            catch (Exception ex)
+            {
+                SetStatus(Lang.T("收藏操作失败：") + ex.Message);
+                LogQqDebug("收藏操作失败: " + ex);
+            }
+        }
+
+        /// <summary>
+        /// 远控红心：按 mid 收藏/取消收藏。手机端可能显示电脑端当前未持有的列表项，
+        /// 本地列表找不到时按 mid 解析歌曲 ID 而不是静默丢弃，否则手机点红心会「没反应」。
+        /// </summary>
+        private async Task ToggleFavByMidAsync(string mid)
+        {
+            if (string.IsNullOrEmpty(mid))
+                return;
+            var song = qqSongs.FirstOrDefault(s => s.Mid == mid)
+                ?? qqSearchSongs.FirstOrDefault(s => s.Mid == mid)
+                ?? qqSingerSongs.FirstOrDefault(s => s.Mid == mid);
+            if (song != null)
+            {
+                await ToggleFavAsync(song);
+                return;
+            }
+            var track = queueTracks.FirstOrDefault(t => t.QqMid == mid);
+            if (track != null)
+            {
+                await ToggleQueueFavAsync(track);
+                return;
+            }
+            var songId = await qqApi.ResolveSongIdAsync(mid);
+            if (songId <= 0)
+            {
+                SetStatus(Lang.T("该歌曲缺少 ID，无法收藏"));
+                LogQqDebug("收藏失败: 歌曲缺少 ID " + mid);
+                return;
+            }
+            var target = !favMidSet.Contains(mid);
+            try
+            {
+                if (target)
+                    await qqApi.AddFavSongAsync(songId, 0);
+                else
+                    await qqApi.RemoveFavSongAsync(songId, 0);
+                if (target) favMidSet.Add(mid); else favMidSet.Remove(mid);
+                ApplyFavStateToLists();
+                SetStatus(target ? $"已收藏：{mid}" : $"已取消收藏：{mid}");
+                LogQqDebug(string.Format(Lang.F("收藏操作(远控): {0} id={1} -> {2}"), mid, songId, target));
             }
             catch (Exception ex)
             {
@@ -3742,13 +3804,7 @@ namespace AuralDesk
                         break;
                     }
                 }
-                albums.Sort((x, y) =>
-                {
-                    var lx = x.IsLive;
-                    var ly = y.IsLive;
-                    if (lx != ly) return lx ? 1 : -1;
-                    return string.Compare(y.Date, x.Date, StringComparison.Ordinal);
-                });
+                albums.Sort(CompareAlbumsByDate);
                 if (reset)
                     qqSingerAlbums.Clear();
                 foreach (var a in albums) qqSingerAlbums.Add(a);
@@ -3911,6 +3967,7 @@ namespace AuralDesk
                 var parsed = QqApiClient.ParseAlbums(data);
                 LogQqDebug("收藏专辑解析: " + parsed.Count + " 张; 首张 Singer=[" +
                            (parsed.Count > 0 ? parsed[0].Singer : "空") + "]");
+                parsed.Sort(CompareAlbumsByDate);
                 foreach (var a in parsed)
                     qqAlbums.Add(a);
                 ApplyFavStateToAlbums();
@@ -3921,6 +3978,27 @@ namespace AuralDesk
                 LogQqDebug("加载收藏专辑失败: " + ex.Message);
                 SetQqStatus(false, Lang.T("加载收藏专辑失败：") + ex.Message);
             }
+        }
+
+        /// <summary>专辑排序：正经发行专辑优先，其次按发行日期从新到旧，日期缺失的排在最后。</summary>
+        private static int CompareAlbumsByDate(QqAlbumInfo x, QqAlbumInfo y)
+        {
+            if (x.IsLive != y.IsLive) return x.IsLive ? 1 : -1;
+            var dx = NormalizeAlbumDate(x.Date);
+            var dy = NormalizeAlbumDate(y.Date);
+            if (dx != dy) return dy.CompareTo(dx);
+            return string.Compare(x.Name, y.Name, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        /// <summary>把 QQ 音乐的多种发行日期写法（2024-09-20 / 2024年 / 202409）归一成 yyyyMMdd。</summary>
+        private static int NormalizeAlbumDate(string? date)
+        {
+            if (string.IsNullOrWhiteSpace(date)) return 0;
+            var digits = new string(date.Where(char.IsDigit).ToArray());
+            if (digits.Length >= 8 && int.TryParse(digits.Substring(0, 8), out var full)) return full;
+            if (digits.Length == 6 && int.TryParse(digits + "01", out var ym)) return ym;
+            if (digits.Length == 4 && int.TryParse(digits + "0101", out var y)) return y;
+            return 0;
         }
 
         private static string? TryGetString(JsonElement el, string name) =>
@@ -4210,6 +4288,7 @@ namespace AuralDesk
                     hqPrevState = -1;
                     lastHqPoll = DateTime.MinValue;
                     hqPlayRequestTime = DateTime.UtcNow;
+                    hqAwaitStart = true;
                 }
                 else
                 {
@@ -5669,6 +5748,8 @@ namespace AuralDesk
                     {
                         SetHqConnected(false);
                         hqPrevState = -1;
+                        hqAwaitStart = false;
+                        hqPlayRequestTime = DateTime.MinValue;
                         if (hqIsPlaying)
                         {
                             hqIsPlaying = false;
@@ -5688,11 +5769,15 @@ namespace AuralDesk
                 if (oldHqPlaying != hqIsPlaying)
                     SyncPlayIcon();
                 // 播放请求后长时间未进入播放状态（HQPlayer 加载卡住）→ 切下一首
-                if (hqPlayRequestTime != DateTime.MinValue &&
+                // 只在「已经交给 HQPlayer、正在等它起播」时才计时：切歌后通常还要下载几十秒，
+                // 那段时间 HQPlayer 是停止态，用时间戳判断会误杀，导致队列一路抢跑到实际播放之前
+                if (hqAwaitStart &&
+                    hqPlayRequestTime != DateTime.MinValue &&
                     status.State != 2 &&
-                    (DateTime.UtcNow - hqPlayRequestTime).TotalSeconds > 15)
+                    (DateTime.UtcNow - hqPlayRequestTime).TotalSeconds > 25)
                 {
                     LogQqDebug("HQPlayer 长时间未开始播放，强制切下一首");
+                    hqAwaitStart = false;
                     hqPlayRequestTime = DateTime.MinValue;
                     lastHqPosition = -1;
                     lastHqMoveTime = DateTime.MinValue;
@@ -5701,11 +5786,16 @@ namespace AuralDesk
                     return;
                 }
                 if (status.State == 2 && hqPlayRequestTime != DateTime.MinValue)
+                {
+                    hqAwaitStart = false;
                     hqPlayRequestTime = DateTime.MinValue;
+                }
                 // 播放中位置长时间不前进（解码卡死）→ 强制切下一首
                 if (status.State == 2)
                 {
-                    if (lastHqPosition >= 0 && Math.Abs(status.Position - lastHqPosition) < 0.5)
+                    // 位置还压在开头（HQPlayer/NAA 仍在预缓冲）不算卡死，避免刚起播就被切走
+                    if (status.Position > 3.0 && lastHqPosition >= 0 &&
+                        Math.Abs(status.Position - lastHqPosition) < 0.5)
                     {
                         if (lastHqMoveTime == DateTime.MinValue)
                             lastHqMoveTime = DateTime.UtcNow;
