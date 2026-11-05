@@ -45,6 +45,8 @@ namespace AuralDesk
         private bool hqVolumeEditing;
         private HqPlayerStatus? hqLastStatus;
         private string hqExternalSong = "";
+        private bool browserHooked;      // WebView2 事件只绑一次
+        private bool browserScriptAdded; // 注入脚本只注册一次
         private readonly HqPlayerClient hqPlayer;
         private readonly DispatcherTimer statsTimer;
         private ulong lastIdleTicks;
@@ -377,7 +379,14 @@ namespace AuralDesk
         private void StopOutput()
         {
             try { systemPlayer.Stop(); } catch { }
-            try { if (foobar.Connected) foobar.Stop(); } catch { }
+            // foobar 客户端是同步 HTTP；StopOutput 在 UI 线程上调用，
+            // 连接挂起时会卡住界面，放到后台线程
+            try
+            {
+                if (foobar.Connected)
+                    _ = Task.Run(() => { try { foobar.Stop(); } catch { } });
+            }
+            catch { }
             fbIsPlaying = false;
             fbHadPlayed = false;
             fbPrevState = "";
@@ -546,6 +555,8 @@ namespace AuralDesk
                     Path = t.Path,
                     QqMid = t.QqMid,
                     AlbumMid = t.AlbumMid,
+                        MediaMid = t.QqSong?.MediaMid ?? "",
+                        SongType = t.QqSong?.SongType ?? 0,
                     QualityName = t.QualityName,
                     IsCurrent = t.IsCurrent
                 }).ToList();
@@ -586,7 +597,9 @@ namespace AuralDesk
                                 Mid = item.QqMid,
                                 Title = item.Title,
                                 Singer = item.Singer,
-                                AlbumMid = item.AlbumMid
+                                AlbumMid = item.AlbumMid,
+                                MediaMid = item.MediaMid,
+                                SongType = item.SongType
                             },
                         IsCurrent = item.IsCurrent
                     };
@@ -1367,18 +1380,22 @@ namespace AuralDesk
                             _ = LoadQqPlaylistsAsync();
                             break;
                         case "openPlaylist":
-                            if (r.TryGetProperty("id", out var pid) && long.TryParse(pid.GetString(), out var plId))
+                            if (r.TryGetProperty("id", out var pid))
                             {
-                                qqTab = "playlists";
-                                currentPlaylistId = plId;
-                                currentPlaylistName = r.TryGetProperty("name", out var pn) ? pn.GetString() ?? Lang.T("歌单") : Lang.T("歌单");
-                                QqHomeScroller.Visibility = Visibility.Collapsed;
-                                QqPlaylistScroller.Visibility = Visibility.Collapsed;
-                                QqSongScroller.Visibility = Visibility.Visible;
-                                QqBackToPlaylists.Visibility = Visibility.Visible;
-                                QqEmptyHint.Visibility = Visibility.Collapsed;
-                                qqSongs.Clear();
-                                _ = LoadQqPlaylistSongsAsync(reset: true);
+                                var plId = JsonToLong(pid);
+                                if (plId > 0)
+                                {
+                                    qqTab = "playlists";
+                                    currentPlaylistId = plId;
+                                    currentPlaylistName = r.TryGetProperty("name", out var pn) ? pn.GetString() ?? Lang.T("歌单") : Lang.T("歌单");
+                                    QqHomeScroller.Visibility = Visibility.Collapsed;
+                                    QqPlaylistScroller.Visibility = Visibility.Collapsed;
+                                    QqSongScroller.Visibility = Visibility.Visible;
+                                    QqBackToPlaylists.Visibility = Visibility.Visible;
+                                    QqEmptyHint.Visibility = Visibility.Collapsed;
+                                    qqSongs.Clear();
+                                    _ = LoadQqPlaylistSongsAsync(reset: true);
+                                }
                             }
                             break;
                         case "fav":
@@ -1525,8 +1542,9 @@ namespace AuralDesk
                             break;
                         case "queueUp":
                         case "queueDown":
-                            if (r.TryGetProperty("index", out var idxEl) && int.TryParse(idxEl.GetString(), out var idx))
+                            if (r.TryGetProperty("index", out var idxEl))
                             {
+                                var idx = JsonToInt(idxEl);
                                 if (action == "queueUp" && idx > 0 && idx < queueTracks.Count)
                                     queueTracks.Move(idx, idx - 1);
                                 else if (action == "queueDown" && idx >= 0 && idx < queueTracks.Count - 1)
@@ -1534,20 +1552,26 @@ namespace AuralDesk
                             }
                             break;
                         case "queueDelete":
-                            if (r.TryGetProperty("index", out var dIdx) && int.TryParse(dIdx.GetString(), out var delIdx)
-                                && delIdx >= 0 && delIdx < queueTracks.Count)
+                            if (r.TryGetProperty("index", out var dIdx))
                             {
-                                queueTracks.RemoveAt(delIdx);
-                                if (currentQueueIndex >= delIdx && currentQueueIndex > 0)
-                                    currentQueueIndex--;
+                                var delIdx = JsonToInt(dIdx);
+                                if (delIdx >= 0 && delIdx < queueTracks.Count)
+                                {
+                                    queueTracks.RemoveAt(delIdx);
+                                    if (currentQueueIndex >= delIdx && currentQueueIndex > 0)
+                                        currentQueueIndex--;
+                                }
                             }
                             break;
                         case "queuePlay":
-                            if (r.TryGetProperty("index", out var qIdx) && int.TryParse(qIdx.GetString(), out var playIdx)
-                                && playIdx >= 0 && playIdx < queueTracks.Count)
+                            if (r.TryGetProperty("index", out var qIdx))
                             {
-                                currentQueueIndex = playIdx;
-                                _ = PlayCurrentQueueAsync();
+                                var playIdx = JsonToInt(qIdx);
+                                if (playIdx >= 0 && playIdx < queueTracks.Count)
+                                {
+                                    currentQueueIndex = playIdx;
+                                    _ = PlayCurrentQueueAsync();
+                                }
                             }
                             break;
                         case "back":
@@ -1591,6 +1615,21 @@ namespace AuralDesk
         {
             UpdateStatsVisibility();
             if (loaded) SaveSettings();
+        }
+
+        /// <summary>远控 JSON 里的整数：手机端一直发字符串，但标准 JSON 客户端会发数字，两种都收。</summary>
+        private static int JsonToInt(JsonElement el)
+        {
+            if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var n)) return n;
+            if (el.ValueKind == JsonValueKind.String && int.TryParse(el.GetString(), out var s)) return s;
+            return -1;
+        }
+
+        private static long JsonToLong(JsonElement el)
+        {
+            if (el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var n)) return n;
+            if (el.ValueKind == JsonValueKind.String && long.TryParse(el.GetString(), out var s)) return s;
+            return -1;
         }
 
         private void UpdateStatsVisibility()
@@ -1812,13 +1851,19 @@ namespace AuralDesk
             try
             {
                 await Browser.EnsureCoreWebView2Async();
-                Browser.CoreWebView2.WebResourceResponseReceived += OnWebResourceResponseReceived;
-                Browser.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+                // 每次切到「流媒体」都会调到这里，重复注册会让同一次网页请求触发多次回调
+                if (!browserHooked)
+                {
+                    Browser.CoreWebView2.WebResourceResponseReceived += OnWebResourceResponseReceived;
+                    Browser.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+                    browserHooked = true;
+                }
                 try
                 {
                     var js = QqInjectScript;
-                    if (!string.IsNullOrEmpty(js))
+                    if (!string.IsNullOrEmpty(js) && !browserScriptAdded)
                     {
+                        browserScriptAdded = true;
                         await Browser.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(js);
                         // 对已加载的当前页面立即注入一次
                         try { await Browser.CoreWebView2.ExecuteScriptAsync(js); } catch { }
@@ -1930,14 +1975,14 @@ namespace AuralDesk
                     var title = string.IsNullOrEmpty(songname)
                         ? Path.GetFileNameWithoutExtension(file)
                         : songname;
-                    UpdateNowPlayingInfo(title, singer, Lang.T("QQ音乐 · ") + quality.ToUpperInvariant());
+                    UpdateNowPlayingInfo(title, singer, QqSourcePrefix + quality.ToUpperInvariant());
                     ShowNoLyrics();
                     SetStatus(string.Format(Lang.F("HQPlayer 播放：{0}"), Path.GetFileName(file)));
                     AddToQueue(new QueueTrack
                     {
                         Title = title,
                         Singer = singer,
-                        Source = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant(),
+                        Source = QqSourcePrefix + quality.ToUpperInvariant(),
                         Path = file,
                         IsCurrent = true
                     });
@@ -1947,7 +1992,7 @@ namespace AuralDesk
                         settings.LastSongPath = file;
                         settings.LastSongTitle = title;
                         settings.LastSongSinger = singer;
-                        settings.LastSongSource = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant();
+                        settings.LastSongSource = QqSourcePrefix + quality.ToUpperInvariant();
                         settings.LastSongPosition = 0;
                         SaveSettings();
                     }
@@ -1961,14 +2006,14 @@ namespace AuralDesk
                             : songname;
                         isPlaying = true;
                         SyncPlayIcon();
-                        UpdateNowPlayingInfo(title, singer, Lang.T("QQ音乐 · ") + quality.ToUpperInvariant());
+                        UpdateNowPlayingInfo(title, singer, QqSourcePrefix + quality.ToUpperInvariant());
                         ShowNoLyrics();
                         SetStatus(string.Format(Lang.F("foobar2000 播放：{0}"), Path.GetFileName(file)));
                         AddToQueue(new QueueTrack
                         {
                             Title = title,
                             Singer = singer,
-                            Source = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant(),
+                            Source = QqSourcePrefix + quality.ToUpperInvariant(),
                             Path = file,
                             IsCurrent = true
                         });
@@ -1982,14 +2027,14 @@ namespace AuralDesk
                     var title = string.IsNullOrEmpty(songname)
                         ? Path.GetFileNameWithoutExtension(file)
                         : songname;
-                    UpdateNowPlayingInfo(title, singer, Lang.T("QQ音乐 · ") + quality.ToUpperInvariant());
+                    UpdateNowPlayingInfo(title, singer, QqSourcePrefix + quality.ToUpperInvariant());
                     ShowNoLyrics();
                     SetStatus(string.Format(Lang.F("系统输出播放：{0}"), Path.GetFileName(file)));
                     AddToQueue(new QueueTrack
                     {
                         Title = title,
                         Singer = singer,
-                        Source = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant(),
+                        Source = QqSourcePrefix + quality.ToUpperInvariant(),
                         Path = file,
                         IsCurrent = true
                     });
@@ -1999,7 +2044,7 @@ namespace AuralDesk
                         settings.LastSongPath = file;
                         settings.LastSongTitle = title;
                         settings.LastSongSinger = singer;
-                        settings.LastSongSource = Lang.T("QQ音乐 · ") + quality.ToUpperInvariant();
+                        settings.LastSongSource = QqSourcePrefix + quality.ToUpperInvariant();
                         settings.LastSongPosition = 0;
                         SaveSettings();
                     }
@@ -2408,7 +2453,10 @@ namespace AuralDesk
                     if (totalDelta > 0)
                     {
                         // kernel 时间包含 idle，忙 = (kernel+user) - idle
-                        double pct = (double)(totalDelta - idleDelta) / totalDelta * 100.0;
+                        // 用有符号浮点相减：多核/频率抖动时 idleDelta 可能略大于 totalDelta，
+                        // ulong 直减会下溢成天文数字
+                        double busy = (double)totalDelta - idleDelta;
+                        double pct = Math.Clamp(busy / totalDelta * 100.0, 0.0, 100.0);
                         CpuValue.Text = $"{pct:F1}%";
                     }
                 }
@@ -4230,6 +4278,9 @@ namespace AuralDesk
         private bool queueSelectMode;
         private DateTime lastQueueSave = DateTime.MinValue;
 
+        /// <summary>QQ 来源前缀（中英共用「QQ音乐」这个 key，避免再维护带空格的变体）。</summary>
+        private static string QqSourcePrefix => Lang.T("QQ音乐") + " · ";
+
         private string CacheDir => settings.ResolvedCachePath;
 
         private async void QqSong_Click(object sender, RoutedEventArgs e)
@@ -4388,7 +4439,7 @@ namespace AuralDesk
                 track = target;
                 track.Path = result.Value.File;
                 track.QualityName = result.Value.QualityName;
-                track.Source = Lang.T("QQ音乐 · ") + track.QualityName;
+                track.Source = QqSourcePrefix + track.QualityName;
                 track.CacheState = "";
                 EnforceCacheLimit();
             }
@@ -4696,7 +4747,7 @@ namespace AuralDesk
                 {
                     target.Path = result.Value.File;
                     target.QualityName = result.Value.QualityName;
-                    target.Source = Lang.T("QQ音乐 · ") + target.QualityName;
+                    target.Source = QqSourcePrefix + target.QualityName;
                     target.CacheState = Lang.T("已缓存");
                     EnforceCacheLimit();
                     LogQqDebug(string.Format(Lang.F("预缓存完成: {0}"), Path.GetFileName(target.Path)));
@@ -4883,7 +4934,9 @@ namespace AuralDesk
                         using (var fs = new FileStream(tmpMflac, FileMode.Append))
                         {
                             fs.Write(new byte[pad], 0, pad);
-                            fs.Write(BitConverter.GetBytes(ekey.Length), 0, 4);
+                        // 长度字段必须含填充字节：qmc_decrypt 会按这个长度从尾部反向切片，
+                        // 只写 ekey.Length 会在 pad>0 时把 ekey 开头裁掉几个字符
+                        fs.Write(BitConverter.GetBytes(ekey.Length + pad), 0, 4);
                         }
                         LogQqDebug(string.Format(Lang.F("已拼接 ekey({0} 字符)"), ekey.Length));
                     }
@@ -5050,7 +5103,7 @@ namespace AuralDesk
                 if (!string.IsNullOrEmpty(info) && !track.Source.Contains(info))
                 {
                     track.QualityName = info;
-                    track.Source = Lang.T("QQ音乐 · ") + info;
+                    track.Source = QqSourcePrefix + info;
                 }
             }
             catch { }
@@ -5187,14 +5240,13 @@ namespace AuralDesk
                     .OrderBy(f => File.GetLastWriteTimeUtc(f))
                     .ToList();
                 long total = files.Sum(f => new FileInfo(f).Length);
-                foreach (var f in files)
+
+                // 按曲数清理：和容量上限是两种独立模式，不能被「未超容量」提前 break
+                if (settings.CacheCountMode == 1)
                 {
-                    if (total <= limitBytes) break;
-                    if (settings.CacheCountMode == 1)
+                    var keep = settings.CacheCount > 0 ? settings.CacheCount : 5;
+                    while (files.Count > keep)
                     {
-                        // 按曲数：保留最近 N 首（不含当前播放），更早的删除
-                        var keep = settings.CacheCount > 0 ? settings.CacheCount : 5;
-                        if (files.Count <= keep) break;
                         var oldest = files[0];
                         files.RemoveAt(0);
                         try
@@ -5203,8 +5255,14 @@ namespace AuralDesk
                             LogQqDebug(string.Format(Lang.F("缓存超数，删除: {0}"), Path.GetFileName(oldest)));
                         }
                         catch { }
-                        continue;
                     }
+                    return;
+                }
+
+                // 按容量清理：files 已按写入时间升序，从最旧的开始删
+                foreach (var f in files)
+                {
+                    if (total <= limitBytes) break;
                     try
                     {
                         var len = new FileInfo(f).Length;
@@ -6433,10 +6491,14 @@ namespace AuralDesk
             if (lyricTimes.Count == 0)
                 return;
             var seconds = pos.TotalSeconds - settings.LyricOffsetMs / 1000.0; // 歌词偏移（正=延后）
-            var next = activeLyricIndex + 1;
-            if (next < lyricTimes.Count && seconds >= lyricTimes[next].TotalSeconds)
+            // 一次跨过多行（切歌、时钟校准、拖动后）要直接定位到最后一句已开始的歌词，
+            // 逐个 tick 只前进一行会滞后好几秒
+            var target = activeLyricIndex;
+            while (target + 1 < lyricTimes.Count && seconds >= lyricTimes[target + 1].TotalSeconds)
+                target++;
+            if (target > activeLyricIndex)
             {
-                SetActiveLyric(next, true);
+                SetActiveLyric(target, true);
                 return;
             }
             if (activeLyricIndex >= 0 && seconds < lyricTimes[activeLyricIndex].TotalSeconds)

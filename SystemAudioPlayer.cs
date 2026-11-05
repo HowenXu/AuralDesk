@@ -115,6 +115,7 @@ namespace AuralDesk
             output = null;
             reader = null;
             IsPlaying = false;
+            HasFile = false;
         }
 
         public void Dispose() => Stop();

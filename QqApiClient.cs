@@ -787,16 +787,18 @@ namespace AuralDesk
         {
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                using var req = new HttpRequestMessage(new HttpMethod(method), path);
-                if (!string.IsNullOrEmpty(_credentialCookie))
-                    req.Headers.TryAddWithoutValidation("Cookie", _credentialCookie);
-                if (body != null)
-                    req.Content = new StringContent(body, Encoding.UTF8, "application/json");
-
                 // sidecar 刚启动时服务可能未就绪：连接类错误重试 3 次（间隔 1s）
                 HttpResponseMessage? resp = null;
                 for (var connTry = 0; connTry < 3; connTry++)
                 {
+                    // HttpRequestMessage 只能发送一次：连接失败后必须重建，
+                    // 否则第二次 SendAsync 抛 InvalidOperationException（不是 HttpRequestException，
+                    // 会直接跳出重试逻辑，sidecar 刚启动时的首次请求就必失败）
+                    using var req = new HttpRequestMessage(new HttpMethod(method), path);
+                    if (!string.IsNullOrEmpty(_credentialCookie))
+                        req.Headers.TryAddWithoutValidation("Cookie", _credentialCookie);
+                    if (body != null)
+                        req.Content = new StringContent(body, Encoding.UTF8, "application/json");
                     try
                     {
                         resp = await _http.SendAsync(req);

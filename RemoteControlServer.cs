@@ -223,8 +223,12 @@ namespace AuralDesk
                             if (n <= 0) break;
                             got += n;
                         }
-                        var prefix = bodyGot > 0 ? Encoding.UTF8.GetString(rawBytes, bodyStart, bodyGot) : "";
-                        body = prefix + Encoding.UTF8.GetString(more, 0, got);
+                        // 不能在字节层分段解码：多字节 UTF-8 字符跨 TCP 包时会被切成两个 U+FFFD。
+                        // 先拼成完整字节数组，再一次性解码。
+                        var full = new byte[contentLength];
+                        if (bodyGot > 0) Array.Copy(rawBytes, bodyStart, full, 0, bodyGot);
+                        if (got > 0) Array.Copy(more, 0, full, bodyGot, got);
+                        body = Encoding.UTF8.GetString(full, 0, bodyGot + got);
                     }
                 }
 

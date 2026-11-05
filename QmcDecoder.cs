@@ -201,14 +201,15 @@ namespace AuralDesk
                     Array.Copy(data, blockIdx, chunk, 0, Math.Min(128, data.Length - blockIdx));
                     mask = new Mask(chunk);
                     var probe = mask.Decrypt(data[..FlacHeader.Length]);
-                    if (IsBytesEqual(FlacHeader, probe)) break;
+                    if (IsBytesEqual(FlacHeader, probe)) return mask;
                 }
                 catch
                 {
                     // 该 128 字节块不是有效掩码，继续探测下一块
                 }
             }
-            return mask;
+            // 没有一块能解出合法的 fLaC 头：这不是 mflac，不能把最后一块的伪掩码返回给调用方
+            return null;
         }
 
         private static Mask? DetectMgg(byte[] input)

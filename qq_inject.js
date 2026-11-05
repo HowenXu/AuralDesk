@@ -103,6 +103,12 @@
         if (!panel || !panel.isConnected) buildUI();
     }
 
+    function escHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+        });
+    }
+
     function togglePanel() {
         ensureUI();
         if (panel.style.display === 'none') renderPanel();
@@ -121,13 +127,18 @@
         var html = '';
         for (var i = 0; i < songs.length; i++) {
             var s = songs[i];
+            // 歌名/歌手来自页面 DOM，拼进 innerHTML 前必须转义，
+            // 否则带 < > " 的名字会破坏结构（也给了注入执行的机会）
+            var name = escHtml(s.name || '未知');
+            var singer = escHtml(s.singer || '');
+            var mid = escHtml(s.mid || '');
             html += '<div style="display:flex;align-items:center;padding:5px 6px;border-radius:6px;margin:2px 0;">' +
                 '<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;">' +
-                (s.name || '未知') + '</div>' +
+                name + '</div>' +
                 '<div style="color:#888;font-size:11px;margin:0 6px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
-                (s.singer || '') + '</div>' +
-                '<button type="button" data-mid="' + s.mid + '" data-name="' + (s.name || '') + '" ' +
-                'data-singer="' + (s.singer || '') + '" ' +
+                singer + '</div>' +
+                '<button type="button" data-mid="' + mid + '" data-name="' + name + '" ' +
+                'data-singer="' + singer + '" ' +
                 'style="border:none;background:#31c27c;color:#111;border-radius:5px;padding:3px 8px;' +
                 'cursor:pointer;font-size:12px;font-family:Segoe UI,Arial,sans-serif;">下载</button></div>';
         }

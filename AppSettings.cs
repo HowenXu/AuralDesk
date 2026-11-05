@@ -57,6 +57,9 @@ namespace AuralDesk
             public string Path { get; set; } = "";
             public string QqMid { get; set; } = "";
             public string AlbumMid { get; set; } = "";
+            // Hi-Res 下载链和 ekey 都要 media_mid；不持久化的话重启后重新下载会拿不到正确音源
+            public string MediaMid { get; set; } = "";
+            public int SongType { get; set; }
             public string QualityName { get; set; } = "";
             public bool IsCurrent { get; set; }
         }
@@ -91,7 +94,11 @@ namespace AuralDesk
             {
                 var dir = System.IO.Path.GetDirectoryName(FilePath);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+                var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+                // 先写临时文件再原子替换：直接覆盖时断电/被杀会留下 0 字节的 settings.json
+                var tmp = FilePath + ".tmp";
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, FilePath, true);
             }
             catch
             {
