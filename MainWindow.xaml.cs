@@ -4352,41 +4352,45 @@ namespace AuralDesk
             if (!string.IsNullOrEmpty(track.Path) && !File.Exists(track.Path))
                 track.Path = "";
 
+            // 每次起播都按 mid 重新挑一次缓存里最好的文件：
+            // 恢复的队列会带着上次记录的路径，而同一首歌后来可能又下载了更高音质的版本，
+            // 只认旧 Path 会一直播（并显示）那份旧的 mp3
+            if (!string.IsNullOrEmpty(track.QqMid))
+            {
+                var bestCached = FindCachedFile(track.QqMid);
+                if (bestCached != null &&
+                    !string.Equals(bestCached, track.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    track.Path = bestCached;
+                }
+                if (bestCached != null) ApplyCachedInfo(track, bestCached);
+            }
+
             if (string.IsNullOrEmpty(track.Path) && !string.IsNullOrEmpty(track.QqMid))
             {
-                // 先查缓存：文件名带 mid 前缀，命中则直接播放
-                var cachedFile = FindCachedFile(track.QqMid);
-                if (cachedFile != null)
+                // 切歌/起播时若无本地文件：暂停播放态并提示加载中，下载完成后再播放
+                isPlaying = false;
+                SyncPlayIcon();
+                UpdateNowPlayingInfo(track.Title, track.Singer, track.Source);
+                SetStatus(string.Format(Lang.F("正在加载：{0}…"), track.Title));
+                var result = await DownloadQqSongAsync(track.QqSong!, track);
+                if (gen != playGeneration) return; // 用户已切到其它曲目，丢弃本次下载结果
+                if (result == null)
                 {
-                    track.Path = cachedFile;
-                    ApplyCachedInfo(track, cachedFile);
+                    SetStatus(string.Format(Lang.F("下载失败，跳过：{0}"), track.Title));
+                    currentQueueIndex++;
+                    await PlayCurrentQueueAsync();
+                    return;
                 }
-                else
-                {
-                    // 切歌/起播时若无本地文件：暂停播放态并提示加载中，下载完成后再播放
-                    isPlaying = false;
-                    SyncPlayIcon();
-                    UpdateNowPlayingInfo(track.Title, track.Singer, track.Source);
-                    SetStatus(string.Format(Lang.F("正在加载：{0}…"), track.Title));
-                    var result = await DownloadQqSongAsync(track.QqSong!, track);
-                    if (gen != playGeneration) return; // 用户已切到其它曲目，丢弃本次下载结果
-                    if (result == null)
-                    {
-                        SetStatus(string.Format(Lang.F("下载失败，跳过：{0}"), track.Title));
-                        currentQueueIndex++;
-                        await PlayCurrentQueueAsync();
-                        return;
-                    }
-                    // 下载期间队列可能被后台全量重建，用 Mid 定位当前项
-                    if (gen != playGeneration) return;
-                    var target = queueTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.QqMid) && t.QqMid == track.QqMid) ?? track;
-                    track = target;
-                    track.Path = result.Value.File;
-                    track.QualityName = result.Value.QualityName;
-                    track.Source = Lang.T("QQ音乐 · ") + track.QualityName;
-                    track.CacheState = "";
-                    EnforceCacheLimit();
-                }
+                // 下载期间队列可能被后台全量重建，用 Mid 定位当前项
+                if (gen != playGeneration) return;
+                var target = queueTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.QqMid) && t.QqMid == track.QqMid) ?? track;
+                track = target;
+                track.Path = result.Value.File;
+                track.QualityName = result.Value.QualityName;
+                track.Source = Lang.T("QQ音乐 · ") + track.QualityName;
+                track.CacheState = "";
+                EnforceCacheLimit();
             }
 
             if (string.IsNullOrEmpty(track.Path))
@@ -4913,16 +4917,20 @@ namespace AuralDesk
                     if (converted)
                     {
                         LogQqDebug(string.Format(Lang.F("OGG 已转 FLAC（HQPlayer 可播）: {0}"), Path.GetFileName(flacFile)));
+                        RemoveLowerQualitySiblings(CacheDir, song.Mid, flacFile);
                         return (flacFile, qualityName);
                     }
                     LogQqDebug("OGG 转 FLAC 失败，保留原文件: " + song.Title);
                     var oggFile = Path.Combine(CacheDir, $"{song.Mid}_{SanitizeFileName(song.Title)}.ogg");
                     await File.WriteAllBytesAsync(oggFile, bytes);
+                    RemoveLowerQualitySiblings(CacheDir, song.Mid, oggFile);
                     return (oggFile, qualityName);
                 }
                 var file = Path.Combine(CacheDir, $"{song.Mid}_{SanitizeFileName(song.Title)}.{ext}");
                 await File.WriteAllBytesAsync(file, bytes);
                 LogQqDebug(string.Format(Lang.F("已缓存: {0} ({1} 字节)"), file, bytes.Length));
+                // 之前降级下载留下的低音质副本（比如 mp3）要删掉，否则下次缓存命中会挑到旧的
+                RemoveLowerQualitySiblings(CacheDir, song.Mid, file);
                 return (file, qualityName);
             }
             catch (Exception ex)
@@ -5038,6 +5046,7 @@ namespace AuralDesk
                 var head = new byte[65536];
                 var n = fs.Read(head, 0, head.Length);
                 var info = QqApiClient.ParseAudioInfo(head, path);
+                LogQqDebug(string.Format("缓存音质: {0} -> {1}", Path.GetFileName(path), info ?? "无法识别"));
                 if (!string.IsNullOrEmpty(info) && !track.Source.Contains(info))
                 {
                     track.QualityName = info;
@@ -5053,39 +5062,107 @@ namespace AuralDesk
             try
             {
                 var prefix = mid + "_";
+                string? best = null;
+                var bestRank = -1;
                 foreach (var f in Directory.GetFiles(CacheDir))
                 {
-                    var name = Path.GetFileName(f);
-                    if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    var file = f;
+                    var name = Path.GetFileName(file);
+                    if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                    // 下载中断留下的临时文件不能当缓存
+                    if (name.Contains(".tmp.", StringComparison.OrdinalIgnoreCase)) continue;
+                    var ext = Path.GetExtension(file);
+                    // 旧版本曾把带 ID3 标签的 MP3 误判成 OGG 缓存（内容实为 MP3）：
+                    // 检测内容后改名为 .mp3 修正，避免系统播放器按 OGG 解码失败。
+                    if (ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase) && IsMp3Content(f))
                     {
-                        var ext = Path.GetExtension(f);
-                        // 旧版本曾把带 ID3 标签的 MP3 误判成 OGG 缓存（内容实为 MP3）：
-                        // 检测内容后改名为 .mp3 修正，避免系统播放器按 OGG 解码失败。
-                        if (ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase) && IsMp3Content(f))
+                        var mp3 = Path.ChangeExtension(f, ".mp3");
+                        try
                         {
-                            var mp3 = Path.ChangeExtension(f, ".mp3");
-                            try
-                            {
-                                File.Move(f, mp3);
-                                return mp3;
-                            }
-                            catch
-                            {
-                                continue; // 改名失败视为无效缓存，走重新下载
-                            }
+                            File.Move(file, mp3);
+                            file = mp3;
+                            ext = ".mp3";
                         }
-                        // NAA 输出忽略 OGG 缓存（旧版本下载的 OGG640 环绕档，HQPlayer 播放不了），
-                        // 命中时走新音质链重新下载（F000 FLAC > MP3 320）
-                        if (UseHqOutput && ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase))
+                        catch
                         {
-                            continue;
+                            continue; // 改名失败视为无效缓存，跳过
                         }
-                        return f;
+                    }
+                    // NAA 输出忽略 OGG 缓存（旧版本下载的 OGG640 环绕档，HQPlayer 播放不了），
+                    // 命中时走新音质链重新下载（F000 FLAC > MP3 320）
+                    if (UseHqOutput && ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var rank = CacheQualityRank(file);
+                    if (rank <= 0) continue;
+                    if (rank > bestRank)
+                    {
+                        bestRank = rank;
+                        best = file;
                     }
                 }
+                if (best != null)
+                {
+                    // 同一首歌可能同时留着早期降级下载的 mp3 和后来的 flac，务必挑最好的那个，
+                    // 否则界面会显示 mp3 的码率、HQPlayer 也会收到低音质文件
+                    LogQqDebug(string.Format("缓存命中: {0} (rank {1})",
+                        Path.GetFileName(best), bestRank));
+                }
+                return best;
             }
             catch { }
             return null;
+        }
+
+        /// <summary>
+        /// 缓存文件音质排序：FLAC > 有损 > OGG；同为 FLAC 时采样率高的优先（96k Hi-Res &gt; 44.1k）。
+        /// 只用于「同一首歌存在多份缓存时挑哪份」，不参与是否重新下载的判断。
+        /// </summary>
+        private static int CacheQualityRank(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var rank = ext switch
+            {
+                ".flac" => 300000,
+                ".m4a" or ".mp4" or ".aac" => 200000,
+                ".mp3" or ".mp2" => 100000,
+                ".ogg" => 50000,
+                _ => 0
+            };
+            if (rank == 0) return 0;
+            if (ext != ".flac") return rank;
+            try
+            {
+                using var fs = File.OpenRead(path);
+                var head = new byte[64 * 1024];
+                var n = fs.Read(head, 0, head.Length);
+                var rate = QqApiClient.GetFlacSampleRate(head, n);
+                return rank + Math.Clamp(rate / 100, 0, 1999); // 96000 -> +960
+            }
+            catch
+            {
+                return rank;
+            }
+        }
+
+        /// <summary>
+        /// 同一首歌成功保存了更高质量的文件后，删掉缓存里更低质量的旧副本。
+        /// 不做反向删除：新版降级到 mp3 时不能把已有的 flac 删掉。
+        /// </summary>
+        private static void RemoveLowerQualitySiblings(string dir, string mid, string keepPath)
+        {
+            if (string.IsNullOrEmpty(mid)) return;
+            try
+            {
+                var keepRank = CacheQualityRank(keepPath);
+                foreach (var f in Directory.GetFiles(dir, mid + "_*"))
+                {
+                    if (string.Equals(f, keepPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (Path.GetFileName(f).Contains(".tmp.", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (CacheQualityRank(f) >= keepRank) continue;
+                    try { File.Delete(f); } catch { }
+                }
+            }
+            catch { }
         }
 
         /// <summary>按 Buffer 设置清理缓存目录中过旧文件（保留当前播放文件）。</summary>

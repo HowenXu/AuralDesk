@@ -873,6 +873,18 @@ namespace AuralDesk
 
         // ---------------- 静态解析辅助 ----------------
 
+        /// <summary>从 FLAC 的 STREAMINFO 读采样率；不是 FLAC 或数据不足时返回 0。</summary>
+        public static int GetFlacSampleRate(byte[] data, int length)
+        {
+            if (data == null || length < 26) return 0;
+            if (data[0] != (byte)'f' || data[1] != (byte)'L'
+                || data[2] != (byte)'a' || data[3] != (byte)'C') return 0;
+            var v = ((long)data[18] << 56) | ((long)data[19] << 48) | ((long)data[20] << 40)
+                  | ((long)data[21] << 32) | ((long)data[22] << 24) | ((long)data[23] << 16)
+                  | ((long)data[24] << 8) | data[25];
+            return (int)(v >> 44);
+        }
+
         /// <summary>
         /// 解析已下载音频的实际格式与采样率。FLAC 解析 STREAMINFO，Ogg 解析 Vorbis 头，
         /// MP3 解析帧头。用于校验 QQ 音质档实际拿到的文件（标准接口无原生 96k，最高 48k/24bit）。
