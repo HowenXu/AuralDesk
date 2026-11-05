@@ -305,7 +305,7 @@ namespace AuralDesk
 
         private int HqPort => NormalizeHqPort(HqPortBox?.Text ?? settings.HqPort);
 
-        /// <summary>当前输出是否走 HQPlayer（升频开关打开且输出选择 NAA）。</summary>
+        /// <summary>当前输出是否走 HQPlayer（升频开关打开且输出选择 HQPlayer）。</summary>
         private bool UseHqOutput => hqOn && OutputCombo?.SelectedIndex == 1;
 
         /// <summary>当前输出是否走 foobar2000（beefweb 插件，由 foobar 负责独占输出）。</summary>
@@ -331,15 +331,15 @@ namespace AuralDesk
                 // HQPlayer 里直接播本地文件时也能看到进度（第几首 / 共几首）
                 if (tracksTotal > 0)
                     HqStatusText.Text += $" · {Math.Clamp(track + 1, 1, tracksTotal)}/{tracksTotal}";
-                NaaStatusText.Text = Lang.T("NAA · 已连接");
+                NaaStatusText.Text = Lang.T("HQPlayer · 已连接");
             }
             else
             {
                 HqStatusDot.Fill = (Brush)FindResource("TextDimBrush");
                 HqStatusText.Text = Lang.T("未连接");
-                NaaStatusText.Text = Lang.T("NAA · 未连接");
+                NaaStatusText.Text = Lang.T("HQPlayer · 未连接");
             }
-            // 底部 NAA 芯片只在选择了 NAA 输出时出现
+            // 底部 HQPlayer 芯片只在选择了 HQPlayer 输出时出现
             NaaStatusText.Visibility = UseHqOutput ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -1915,7 +1915,7 @@ namespace AuralDesk
                 {
                     if (!await Task.Run(() => hqPlayer.PlayFile(file)))
                     {
-                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA"));
+                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出设置正确"));
                         return;
                     }
                     hqIsPlaying = true;
@@ -2297,7 +2297,7 @@ namespace AuralDesk
                     }
                     else
                     {
-                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA"));
+                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出设置正确"));
                     }
                 }
                 else if (UseFoobarOutput)
@@ -4495,7 +4495,7 @@ namespace AuralDesk
                 {
                     if (!await Task.Run(() => hqPlayer.PlayFile(track.Path)))
                     {
-                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA"));
+                        SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出设置正确"));
                         LogQqDebug("HQPlayer PlayFile 失败: " + track.Path);
                         _ = PlayNextQueueAsync();
                         return;
@@ -4567,7 +4567,7 @@ namespace AuralDesk
             }
         }
 
-        /// <summary>HQPlayer 不支持的容器（Ogg/Vorbis、M4A/AAC）在 NAA 输出时直接跳过。</summary>
+        /// <summary>HQPlayer 不支持的容器（Ogg/Vorbis、M4A/AAC）在选择 HQPlayer 输出时直接跳过。</summary>
         private static bool IsHqPlayableAudioFile(string path)
         {
             try
@@ -5088,7 +5088,7 @@ namespace AuralDesk
                             continue; // 改名失败视为无效缓存，跳过
                         }
                     }
-                    // NAA 输出忽略 OGG 缓存（旧版本下载的 OGG640 环绕档，HQPlayer 播放不了），
+                    // HQPlayer 输出忽略 OGG 缓存（旧版本下载的 OGG640 环绕档，HQPlayer 播放不了），
                     // 命中时走新音质链重新下载（F000 FLAC > MP3 320）
                     if (UseHqOutput && ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase))
                         continue;
@@ -6304,7 +6304,7 @@ namespace AuralDesk
                 // 播放中位置长时间不前进（解码卡死）→ 强制切下一首
                 if (status.State == 2)
                 {
-                    // 位置还压在开头（HQPlayer/NAA 仍在预缓冲）不算卡死，避免刚起播就被切走
+                    // 位置还压在开头（HQPlayer 仍在预缓冲）不算卡死，避免刚起播就被切走
                     if (status.Position > 3.0 && lastHqPosition >= 0 &&
                         Math.Abs(status.Position - lastHqPosition) < 0.5)
                     {

@@ -11,7 +11,7 @@
     <sys:String x:Key="navSettings">设置</sys:String>
     <sys:String x:Key="navStream">流媒体</sys:String>
     <sys:String x:Key="outHqConfigureHint">输出与升频配置请在 HQPlayer 中调整</sys:String>
-    <sys:String x:Key="outNaa">NAA（HQPlayer）</sys:String>
+    <sys:String x:Key="outNaa">HQPlayer</sys:String>
     <sys:String x:Key="outFoobar">foobar2000</sys:String>
     <sys:String x:Key="outSystemOutput">系统输出</sys:String>
     <sys:String x:Key="queueView">播放队列</sys:String>
@@ -120,7 +120,7 @@
     <sys:String x:Key="expandNowPlaying">展开正在播放</sys:String>
     <sys:String x:Key="notPlaying">未在播放</sys:String>
     <sys:String x:Key="ready">就绪</sys:String>
-    <sys:String x:Key="naaDisconnected">NAA · 未连接</sys:String>
+    <sys:String x:Key="naaDisconnected">HQPlayer · 未连接</sys:String>
     <sys:String x:Key="collapse">收起</sys:String>
     <sys:String x:Key="fullscreen">全屏</sys:String>
     <sys:String x:Key="demo1">在安静的夜里，做着发烧般的梦</sys:String>

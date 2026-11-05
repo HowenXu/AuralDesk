@@ -11,7 +11,7 @@
     <sys:String x:Key="navSettings">Settings</sys:String>
     <sys:String x:Key="navStream">Stream</sys:String>
     <sys:String x:Key="outHqConfigureHint">Configure output &amp; upsampling in HQPlayer</sys:String>
-    <sys:String x:Key="outNaa">NAA (HQPlayer)</sys:String>
+    <sys:String x:Key="outNaa">HQPlayer</sys:String>
     <sys:String x:Key="outFoobar">foobar2000</sys:String>
     <sys:String x:Key="outSystemOutput">System output</sys:String>
     <sys:String x:Key="queueView">Play Queue</sys:String>
@@ -120,7 +120,7 @@
     <sys:String x:Key="expandNowPlaying">Expand now playing</sys:String>
     <sys:String x:Key="notPlaying">Not playing</sys:String>
     <sys:String x:Key="ready">Ready</sys:String>
-    <sys:String x:Key="naaDisconnected">NAA · not connected</sys:String>
+    <sys:String x:Key="naaDisconnected">HQPlayer · not connected</sys:String>
     <sys:String x:Key="collapse">Collapse</sys:String>
     <sys:String x:Key="fullscreen">Fullscreen</sys:String>
     <sys:String x:Key="demo1">In the quiet night, dreaming of audiophile dreams</sys:String>
@@ -135,9 +135,9 @@
     <sys:String x:Key="hqMissingCta">Download HQPlayer Desktop at https://signalyst.com to try upsampling.</sys:String>
     <sys:String x:Key="hqMissingOnce">This notice shows only once</sys:String>
     <sys:String x:Key="gotIt">Got it</sys:String>
-    <sys:String x:Key="NAA · 已连接">NAA · connected</sys:String>
+    <sys:String x:Key="NAA · 已连接">HQPlayer · connected</sys:String>
     <sys:String x:Key="未连接">Not connected</sys:String>
-    <sys:String x:Key="NAA · 未连接">NAA · not connected</sys:String>
+    <sys:String x:Key="NAA · 未连接">HQPlayer · not connected</sys:String>
     <sys:String x:Key="未在播放">Not playing</sys:String>
     <sys:String x:Key="已停止播放">Playback stopped</sys:String>
     <sys:String x:Key="已恢复上次播放（点击播放继续）">Restored last playback (press play to continue)</sys:String>
@@ -146,7 +146,9 @@
     <sys:String x:Key="未开启">Not enabled</sys:String>
     <sys:String x:Key="收藏的专辑">Favorite albums</sys:String>
     <sys:String x:Key="下载失败：无权限或接口返回为空（可能需 VIP/付费）">Download failed: no permission or empty reply (VIP/paywall?)</sys:String>
-    <sys:String x:Key="HQPlayer 播放失败：请确认 HQPlayer 已启动、输出为 NAA">HQPlayer playback failed: make sure HQPlayer is running with NAA output</sys:String>
+    <sys:String x:Key="HQPlayer 播放失败：请确认 HQPlayer 已启动、输出设置正确">HQPlayer playback failed - make sure HQPlayer is running and its output is configured</sys:String>
+    <sys:String x:Key="HQPlayer · 已连接">HQPlayer · connected</sys:String>
+    <sys:String x:Key="HQPlayer · 未连接">HQPlayer · not connected</sys:String>
     <sys:String x:Key="捕获到 QQ 音乐音源，开始下载…">Caught QQ Music source, downloading…</sys:String>
     <sys:String x:Key="下载失败：响应为空">Download failed: empty response</sys:String>
     <sys:String x:Key="解密失败：无法检测掩码（可能是新加密格式）">Decrypt failed: cannot detect the mask (possibly a new format)</sys:String>

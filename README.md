@@ -2,7 +2,7 @@
 
 > 中文版 README：[README.zh-CN.md](README.zh-CN.md)
 
-> A streaming-music upsampling player for Hi-Fi setups: QQ Music Hi-Res download & decrypt → HQPlayer upsampling → NAA / USB-exclusive output.
+> A streaming-music upsampling player for Hi-Fi setups: QQ Music Hi-Res download & decrypt → HQPlayer upsampling → your DAC (USB-exclusive or NAA).
 
 **Status:** mostly feature-complete. No plans for major new features — the road to embedding HQPlayer is blocked, so expect only small fixes and UX polish from here. (Nobody really uses this anyway...)
 
@@ -14,7 +14,9 @@
 
 AuralDesk is a **streaming upsampling player** for Windows. It is not a general-purpose Hi-Fi player — it is a streaming front-end **deeply tied to HQPlayer**: sign in to your QQ Music account, browse playlists/albums/artists/collections, download songs (**Hi-Res included**), decrypt them locally into full lossless files, and hand them to HQPlayer for real-time upsampling before delivery to your DAC over NAA or USB-exclusive output.
 
-The whole point of the app is to make "streaming upsampling" smooth and pleasant. Anything outside HQPlayer (like plain system-output listening) is just a convenience for quick auditions.
+The whole point of the app is to make "streaming upsampling" smooth and pleasant. HQPlayer owns the audio chain and can drive the DAC either USB-exclusive or over NAA — AuralDesk does not care which, it only feeds complete lossless files. Anything outside HQPlayer (plain system output, or the optional foobar2000 backend) is a convenience for quick auditions or for people who already have a foobar chain.
+
+There is also an Android remote: same LAN, scan-and-connect, browse/search/favourite, edit the queue, and control HQPlayer's transport and volume from the phone.
 
 > If you actually want a USB-exclusive *non-upsampling* path built in, file an issue — I don't need it myself. 😋
 
