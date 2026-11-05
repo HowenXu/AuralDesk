@@ -21,10 +21,13 @@ namespace AuralDesk
             return sys;
         }
 
-        /// <summary>取界面文本；key 即中文原文（English 时查英文资源，找不到回退原文）。</summary>
+        /// <summary>
+        /// 取界面文本。key 既可能是中文原文（如「未在播放」），也可能是资源 ID（如 updateUpToDate）。
+        /// 两种都要先查当前语言字典：以前中文模式直接 return 原文，传资源 ID 时会原样显示 "updateUpToDate"。
+        /// 查不到就回退到传入的字符串，所以中文原文在缺翻译时仍然是中文。
+        /// </summary>
         public static string T(string zh)
         {
-            if (!IsEnglish) return zh;
             var r = Application.Current?.TryFindResource(zh);
             return r as string ?? zh;
         }
