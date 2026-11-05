@@ -61,4 +61,7 @@
     <string name="move_down">Move down</string>
     <string name="update_title">New version available</string>
     <string name="update_msg">A new version v%1$s is available. Open the releases page?</string>
+    <string name="hq_playing">Playing</string>
+    <string name="hq_paused">Paused</string>
+    <string name="hq_volume_title">HQPlayer volume (dB)</string>
 </resources>

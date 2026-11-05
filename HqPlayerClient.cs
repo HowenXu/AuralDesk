@@ -16,6 +16,7 @@ namespace AuralDesk
         public double Length;       // 秒
         public int Track;
         public int TracksTotal;
+        public double Volume;       // dB（-80..20 之间，具体范围由 HQPlayer 设置决定）
         public long ActiveRate;     // Hz，升频后的输出采样率
         public string ActiveMode = "";  // 例如 "SDM (DSD)" / "PCM" / "[source]"
         public string ActiveFilter = "";
@@ -168,6 +169,7 @@ namespace AuralDesk
                     Length = GetDouble(root, "length"),
                     Track = GetInt(root, "track"),
                     TracksTotal = GetInt(root, "tracks_total"),
+                    Volume = GetDouble(root, "volume"),
                     ActiveRate = GetLong(root, "active_rate"),
                     ActiveMode = GetAttr(root, "active_mode"),
                     ActiveFilter = GetAttr(root, "active_filter"),
@@ -218,6 +220,12 @@ namespace AuralDesk
             HasOk(SendCommand(
                 "<?xml version=\"1.0\"?><Seek position=\"" +
                 seconds.ToString("0.###", CultureInfo.InvariantCulture) + "\"/>"));
+
+        /// <summary>设置 HQPlayer 音量（dB）。HQPlayer 的 XML 控制接口只认 dB 数值。</summary>
+        public bool SetVolume(double db) =>
+            HasOk(SendCommand(
+                "<?xml version=\"1.0\"?><Volume value=\"" +
+                db.ToString("0.#", CultureInfo.InvariantCulture) + "\"/>"));
 
         /// <summary>清空 HQPlayer 播放列表并播放指定本地文件。</summary>
         public bool PlayFile(string path)

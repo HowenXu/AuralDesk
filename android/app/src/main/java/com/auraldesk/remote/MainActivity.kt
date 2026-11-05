@@ -80,6 +80,11 @@ class MainActivity : Activity() {
     private lateinit var playBtn: ImageButton
     private lateinit var prevBtn: ImageButton
     private lateinit var nextBtn: ImageButton
+    private lateinit var hqRow: LinearLayout
+    private lateinit var hqLabel: TextView
+    private lateinit var hqVolText: TextView
+    private var hqVolumeNow = 0.0
+    private var hqConnectedNow = false
 
     private var uiPolling = false
     private var userSeeking = false
@@ -91,6 +96,9 @@ class MainActivity : Activity() {
     private val phoneQueueExtra = mutableListOf<JSONObject>()
     private var queueLoadingMore = false
     private var lastMergedQueue: List<JSONObject> = emptyList()
+    private var lastQueueHead = ""
+    private var lastQueueTotal = -1
+    private var suppressScrollRestore = false
     private lateinit var queueTitleText: TextView
     private lateinit var qqSearchPanel: LinearLayout
     private lateinit var qqSearchInput2: EditText
@@ -176,15 +184,27 @@ class MainActivity : Activity() {
                 conn.setRequestProperty("User-Agent", "AuralDeskRemote")
                 if (conn.responseCode in 200..299) {
                     val j = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-                    val tag = j.optString("tag_name", "").trimStart('v')
-                    val remote = parseVersion(tag)
+                    // 只比较真正带 APK 的版本：桌面端和手机端共用同一个仓库，
+                    // 直接拿 release 的 tag 比会永远“有新版本”（tag 是桌面的版本号）
+                    var apkVersion = ""
+                    val assets = j.optJSONArray("assets")
+                    if (assets != null) {
+                        for (i in 0 until assets.length()) {
+                            val name = assets.getJSONObject(i).optString("name", "")
+                            if (name.startsWith("AuralDesk-Android-v") && name.endsWith(".apk")) {
+                                apkVersion = name.removePrefix("AuralDesk-Android-v").removeSuffix(".apk")
+                                break
+                            }
+                        }
+                    }
+                    val remote = if (apkVersion.isEmpty()) null else parseVersion(apkVersion)
                     val cur = parseVersion(packageManager.getPackageInfo(packageName, 0).versionName ?: "")
                     prefs.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply()
-                    if (tag.isNotEmpty() && remote != null && cur != null && greater(remote, cur)) {
+                    if (remote != null && cur != null && greater(remote, cur)) {
                         runOnUiThread {
                             android.app.AlertDialog.Builder(this)
                                 .setTitle(getString(R.string.update_title))
-                                .setMessage(getString(R.string.update_msg, tag))
+                                .setMessage(getString(R.string.update_msg, apkVersion))
                                 .setPositiveButton(android.R.string.yes) { _, _ ->
                                     startActivity(
                                         Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HowenXu/AuralDesk/releases/latest"))
@@ -641,6 +661,46 @@ class MainActivity : Activity() {
         metaRow.addView(nowMeta)
         control.addView(metaRow)
 
+        // HQPlayer 遥控行：显示 HQPlayer 自己的播放进度，并直接调它的数字音量（dB）
+        hqRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, 0)
+            visibility = View.GONE
+        }
+        hqLabel = TextView(this).apply {
+            textSize = 10f
+            setTextColor(dim)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val volMinus = TextView(this).apply {
+            text = "−"
+            textSize = 16f
+            setTextColor(txt)
+            setPadding(dp(10), dp(2), dp(10), dp(2))
+            setOnClickListener { sendHqVolume(hqVolumeNow - 1) }
+        }
+        hqVolText = TextView(this).apply {
+            textSize = 11f
+            setTextColor(txt)
+            gravity = Gravity.CENTER
+            minWidth = dp(72)
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+            setOnClickListener { editHqVolume() }
+        }
+        val volPlus = TextView(this).apply {
+            text = "+"
+            textSize = 16f
+            setTextColor(txt)
+            setPadding(dp(10), dp(2), dp(10), dp(2))
+            setOnClickListener { sendHqVolume(hqVolumeNow + 1) }
+        }
+        hqRow.addView(hqLabel)
+        hqRow.addView(volMinus)
+        hqRow.addView(hqVolText)
+        hqRow.addView(volPlus)
+        control.addView(hqRow)
+
         // 进度条单独一行
         seekBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 1000
@@ -733,6 +793,35 @@ class MainActivity : Activity() {
         thread { RemoteClient.qqAction(map) }
     }
 
+    /** 设置 HQPlayer 音量（dB）。范围与桌面端一致：-80..20。 */
+    private fun sendHqVolume(db: Double) {
+        val v = db.coerceIn(-80.0, 20.0)
+        hqVolumeNow = v
+        hqVolText.text = String.format(java.util.Locale.US, "%.1f dB", v)
+        act(mapOf("action" to "hqVolume", "value" to v))
+    }
+
+    /** 点中间的数字直接输入，回车/确定生效。 */
+    private fun editHqVolume() {
+        val input = EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+            setText(String.format(java.util.Locale.US, "%.1f", hqVolumeNow))
+            setSelection(text.length)
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
+        val box = android.widget.FrameLayout(this).apply { setPadding(dp(8), 0, dp(8), 0); addView(input) }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(getString(R.string.hq_volume_title))
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                input.text.toString().trim().toDoubleOrNull()?.let { sendHqVolume(it) }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun connect(manual: String) {
         connText.text = getString(R.string.status_scanning)
         thread {
@@ -800,6 +889,25 @@ class MainActivity : Activity() {
         nowMeta.visibility = if (singer.isEmpty()) View.GONE else View.VISIBLE
         val playing = st.optBoolean("playing", false)
         playBtn.setImageResource(if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+        // HQPlayer 自己的状态：本地音源在 HQPlayer 里播放时也能看到曲目进度和调音量
+        hqConnectedNow = st.optBoolean("hqConnected", false)
+        hqVolumeNow = st.optDouble("hqVolume", hqVolumeNow)
+        hqRow.visibility = if (hqConnectedNow) View.VISIBLE else View.GONE
+        if (hqConnectedNow) {
+            val hqTrack = st.optInt("hqTrack", 0)
+            val hqTotal = st.optInt("hqTracksTotal", 0)
+            val hqState = st.optInt("hqState", 0)
+            val hqSong = st.optString("hqSong", "")
+            val stateText = when (hqState) {
+                2 -> getString(R.string.hq_playing)
+                1 -> getString(R.string.hq_paused)
+                else -> ""
+            }
+            val posText2 = if (hqTotal > 0) "${hqTrack + 1}/$hqTotal" else ""
+            hqLabel.text = listOf("HQPlayer", stateText, posText2, hqSong)
+                .filter { it.isNotEmpty() }.joinToString(" · ")
+            hqVolText.text = String.format(java.util.Locale.US, "%.1f dB", hqVolumeNow)
+        }
         val len = st.optDouble("length", 0.0)
         val pos = st.optDouble("position", 0.0)
         durText.text = fmt(len)
@@ -823,9 +931,13 @@ class MainActivity : Activity() {
         val queueSig = st.optJSONArray("queue")?.let { arr ->
             (0 until arr.length()).joinToString(",") {
                 val o = arr.getJSONObject(it)
-                o.optString("title") + "|" + o.optBoolean("isCurrent") + "|" + o.optBoolean("isFav")
+                val dl = o.optDouble("download", -1.0)
+                o.optString("title") + "|" + o.optBoolean("isFav") + "|" + o.optBoolean("cached") +
+                    "|" + o.optString("cache") + "|" + (if (dl < 0) "x" else (dl * 10).toInt().toString())
             }
         } ?: ""
+        // 当前曲目变化也要触发重绘，否则高亮停在上一首
+        val queueHeadSig = "$queueSig|cur=$lastCurrentIndex"
         // 搜索/歌手/专辑数据也纳入签名：视图不变但结果更新时同样要重绘
         fun arrSig(arr: JSONArray?, key: String): String =
             arr?.let { a ->
@@ -852,7 +964,7 @@ class MainActivity : Activity() {
         val singerAlbumSig = albumFavSig(st.optJSONArray("singerAlbums"))
         val favAlbumSig = albumFavSig(st.optJSONArray("favAlbums"))
         val tabSig = st.optString("searchTab", "") + "|" + st.optString("singerTab", "")
-        val newSig = "$view|$title|$songSig|$playlistSig|$queueSig|$searchSongSig|$searchAlbumSig|$searchSingerSig|$singerSongSig|$singerAlbumSig|$favAlbumSig|$tabSig"
+        val newSig = "$view|$title|$songSig|$playlistSig|$queueHeadSig|$searchSongSig|$searchAlbumSig|$searchSingerSig|$singerSongSig|$singerAlbumSig|$favAlbumSig|$tabSig"
         if (newSig == sig) return
         sig = newSig
 
@@ -877,7 +989,7 @@ class MainActivity : Activity() {
             "albums" -> renderAlbums(st)
             else -> renderSongs(st.optJSONArray("songs"))
         }
-        renderQueue(st.optJSONArray("queue"))
+        renderQueue(st.optJSONArray("queue"), qt)
     }
 
     /** 切换流媒体主区域：普通列表 vs 搜索/歌手/专辑面板。 */
@@ -1283,20 +1395,40 @@ class MainActivity : Activity() {
         pm.show()
     }
 
-    private fun renderQueue(list: JSONArray?) {
+    private fun renderQueue(list: JSONArray?, total: Int = -1) {
         lastQueueJson = list
         queueJumpBtn.visibility = if (multiSelect) View.GONE else View.VISIBLE
         queueSelectAllBtn.visibility = if (multiSelect) View.VISIBLE else View.GONE
         queueDeleteSelBtn.visibility = if (multiSelect) View.VISIBLE else View.GONE
         queueDoneBtn.visibility = if (multiSelect) View.VISIBLE else View.GONE
+        val prevScroll = queueScroll.scrollY
         queueList.removeAllViews()
-        // 合并分页数据：轮询前 30 + 手动加载的后续页，按电脑端原始索引排序
-        val merged = mutableListOf<JSONObject>()
-        if (list != null) {
-            for (i in 0 until list.length()) merged.add(list.getJSONObject(i))
+        // 队列被整体替换（换歌单/点了新列表）时扔掉旧分页：
+        // 两个队列的索引都从 0 开始，混在一起就会出现「同一首歌出现两遍」和错位高亮
+        val head = if (list != null && list.length() > 0) {
+            val o = list.getJSONObject(0)
+            o.optString("mid") + "|" + o.optString("title")
+        } else ""
+        if (head.isNotEmpty()) {
+            if (lastQueueHead.isNotEmpty() &&
+                (head != lastQueueHead || (total in 1 until lastQueueTotal)))
+                phoneQueueExtra.clear()
+            lastQueueHead = head
         }
-        for (extra in phoneQueueExtra) merged.add(extra)
-        merged.sortBy { it.optInt("idx") }
+        if (total >= 0) lastQueueTotal = total
+        // 合并分页：同一 idx 只保留一份，轮询到的首页数据覆盖旧分页（缓存状态最新）
+        val mergedMap = HashMap<Int, JSONObject>()
+        for (extra in phoneQueueExtra) {
+            val idx = extra.optInt("idx", -1)
+            if (idx >= 0) mergedMap[idx] = extra
+        }
+        if (list != null) {
+            for (i in 0 until list.length()) {
+                val o = list.getJSONObject(i)
+                mergedMap[o.optInt("idx", -1)] = o
+            }
+        }
+        val merged = mergedMap.values.sortedBy { it.optInt("idx") }
         lastMergedQueue = merged
         if (merged.isEmpty()) {
             queueList.addView(TextView(this).apply {
@@ -1305,15 +1437,19 @@ class MainActivity : Activity() {
                 setTextColor(dim)
                 setPadding(0, dp(20), 0, 0)
             })
+            if (!suppressScrollRestore) queueScroll.post { queueScroll.scrollTo(0, prevScroll) }
+            suppressScrollRestore = false
             return
         }
         for (i in 0 until merged.size) {
             val q = merged[i]
-            val current = q.optBoolean("isCurrent", false)
-            if (current) lastCurrentIndex = i
-            val cached = q.optBoolean("cached", false) || q.optString("cache", "").isNotEmpty()
-            val qmid = q.optString("mid", "")
             val idx = q.optInt("idx")
+            // 用服务端 currentIndex 判断：当前歌可能不在已加载的这几页里，
+            // 不能依赖分页里的 isCurrent，也不能把合并后的下标写回 lastCurrentIndex
+            val current = idx == lastCurrentIndex
+            val cached = q.optBoolean("cached", false) || q.optString("cache", "").isNotEmpty()
+            val dl = q.optDouble("download", -1.0)
+            val qmid = q.optString("mid", "")
             val isSel = selected.contains(idx)
             val line = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -1351,6 +1487,14 @@ class MainActivity : Activity() {
                             text = getString(R.string.cached)
                             textSize = 10f
                             setTextColor(Color.rgb(29, 138, 62))
+                            setPadding(dp(6), 0, 0, 0)
+                        })
+                    }
+                    if (!cached && !isSel && dl in 0.0..0.999) {
+                        addView(TextView(this@MainActivity).apply {
+                            text = "${(dl * 100).toInt()}%"
+                            textSize = 9f
+                            setTextColor(dim)
                             setPadding(dp(6), 0, 0, 0)
                         })
                     }
@@ -1404,6 +1548,9 @@ class MainActivity : Activity() {
             }
             queueList.addView(line)
         }
+        // 重绘后保持原来的滚动位置，否则「加载更多」会把列表拽回顶部
+        if (!suppressScrollRestore) queueScroll.post { queueScroll.scrollTo(0, prevScroll) }
+        suppressScrollRestore = false
     }
 
     private fun enterMultiSelect(idx: Int) {
@@ -1447,7 +1594,11 @@ class MainActivity : Activity() {
 
     private fun loadMoreQueue() {
         if (queueLoadingMore) return
-        val start = 30 + phoneQueueExtra.size
+        // 从已加载的最大索引往后接，避免「先跳到当前页」之后又按 30+数量 取，
+        // 结果中间空一大段或者重复请求同一批
+        val maxIdx = lastMergedQueue.maxOfOrNull { it.optInt("idx", -1) } ?: -1
+        if (lastQueueTotal > 0 && maxIdx + 1 >= lastQueueTotal) return
+        val start = maxIdx + 1
         queueLoadingMore = true
         thread {
             val st = RemoteClient.qqState(start, 30)
@@ -1485,6 +1636,7 @@ class MainActivity : Activity() {
                     if (phoneQueueExtra.none { it.optInt("idx") == o.optInt("idx") })
                         phoneQueueExtra.add(o)
                 }
+                suppressScrollRestore = true
                 refreshQueue()
                 val pos = lastMergedQueue.indexOfFirst { it.optInt("idx") == idx }
                 if (pos >= 0) {

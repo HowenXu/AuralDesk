@@ -19,7 +19,7 @@ AuralDesk 是一台跑在 Windows 上的**流媒体升频播放器**。它不是
 **和「QQ 音乐直接 UPnP 投送 foobar2000 → HQPlayer 升频」有什么区别？**
 
 - QQ 音乐的 UPnP 投送**不支持 Hi-Res**，投送链路通常只到 48kHz；AuralDesk 支持 Hi-Res 音源（实测 96kHz 全链路可用），下载后本地解密成完整无损文件，再交给 HQPlayer 升频，采样率、码率都不打折。
-- 不依赖 foobar2000 中转，下载 → 解密 → 缓存 → 升频一体完成，播放队列按歌单完整加载，自动缓存下一首，听完即清，省心省空间。
+- 不依赖 foobar2000 中转，下载 → 解密 → 缓存 → 升频一体完成，播放队列按歌单完整加载，自动缓存下一首，听完即清，省心省空间。（foobar2000 也做成了一个**可选**的输出方式，见下文。）
 
 ## 为什么没把 HQPlayer 集成进软件
 
@@ -38,7 +38,8 @@ AuralDesk 是一台跑在 Windows 上的**流媒体升频播放器**。它不是
 - **音质三档**：Hi-Res / 无损 / 普通，按音源实际采样率自动归类（Hi-Res 以 96kHz 为主；若无 Hi-Res 档自动降无损，绝不选臻品母带这类升频营销档）。
 - **内置解密**：QMC 文件离线解密（独立库见 [qmc-decrypt](https://github.com/HowenXu/qmc-decrypt)），纯 Python 零依赖，随包分发。
 - **HQPlayer 集成**：支持 PCM / DSD 升频，经 NAA 投送或 USB 独占到解码器；可自动检测并拉起 HQPlayer。
-- **输出方式**：HQPlayer / 系统输出，切换即用。
+- **输出方式**：HQPlayer / 系统输出 / foobar2000（可选），切换即用。
+- **HQPlayer 遥控**：读取 HQPlayer 的播放状态、曲目序号与音量，电脑端和手机端都能直接调它的数字音量（dB）。
 - **歌词与封面**：滚动歌词、逐行高亮、翻译；专辑与歌手页带封面。
 - **播放队列**：歌单完整加载、随机播放、上下移/多选删除、提前缓存下一首（数量可设）、缓冲空间与路径可配。
 - **手机遥控**：Android 端在同一 WiFi 下自动扫描并连接，可控制播放、队列、搜索、收藏，通知栏显示播放状态。
@@ -71,6 +72,8 @@ AuralDesk 是一台跑在 Windows 上的**流媒体升频播放器**。它不是
 
 - **系统输出**：电脑直接出声，方便快速试听。
 - **HQPlayer**：在 HQPlayer 里配置好升频与输出（NAA 或 USB 独占），软件把完整无损文件交给 HQPlayer 实时升频。升频设置、NAA 地址等请到 HQPlayer 界面调整，软件内另有「自动启动 HQPlayer」选项（设置里可指定 HQPlayer 路径）。
+- **foobar2000**（可选）：走 [beefweb](https://github.com/hyperblast/beefweb) 组件。把 beefweb 装进 foobar2000、让 foobar 保持运行，然后在软件里选 `foobar2000` 输出。实际出声完全由 foobar2000 负责 —— WASAPI 独占、DSP 链、输出设备都在 foobar 里设置，本软件只负责告诉它播哪个完整文件。
+- **关于 foobar2000 的测试说明**：我自己不用 foobar2000（我的链路是 HQPlayer → NAA），所以这是整个软件里测试最少的一条输出路径。有问题欢迎发 issue，我会不定期看，但修复可能要等。
 
 ### 五、使用
 

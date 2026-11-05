@@ -35,8 +35,16 @@ namespace AuralDesk
         private DateTime lastHqPoll = DateTime.MinValue;
         private double lastHqPosition = -1;
         private DateTime lastHqMoveTime = DateTime.MinValue;
+        // 播放期间最后一次有效的位置/时长：HQPlayer 停止后 Status 里的 position/length 会清零，
+        // 只能用这两个残留值判断「是播到结尾停的」还是「用户手动停的」。
+        private double hqLastPlayPos;
+        private double hqLastPlayLen;
         private DateTime hqPlayRequestTime = DateTime.MinValue;
         private bool hqAwaitStart;   // 已把文件交给 HQPlayer、正在等它真正起播
+        private double hqVolume;     // HQPlayer 当前音量（dB）
+        private bool hqVolumeEditing;
+        private HqPlayerStatus? hqLastStatus;
+        private string hqExternalSong = "";
         private readonly HqPlayerClient hqPlayer;
         private readonly DispatcherTimer statsTimer;
         private ulong lastIdleTicks;
@@ -175,6 +183,10 @@ namespace AuralDesk
         public MainWindow()
         {
             InitializeComponent();
+            // 版本号直接取程序集版本，不再写死在资源里（以前一直显示「v0.1.0 · 界面原型」）
+            var ver = typeof(MainWindow).Assembly.GetName().Version;
+            if (ver != null)
+                AppFooterView.Text = $"v{ver.Major}.{ver.Minor}.{ver.Build}";
             hqPlayer = new HqPlayerClient(
                 string.IsNullOrWhiteSpace(settings.HqAddress) ? "127.0.0.1" : settings.HqAddress.Trim(),
                 NormalizeHqPort(settings.HqPort));
@@ -306,7 +318,8 @@ namespace AuralDesk
             return hz + "Hz";
         }
 
-        private void SetHqConnected(bool connected, long activeRate = 0, string activeMode = "")
+        private void SetHqConnected(bool connected, long activeRate = 0, string activeMode = "",
+            int track = 0, int tracksTotal = 0)
         {
             if (HqStatusDot == null || HqStatusText == null || NaaStatusText == null) return;
             if (connected)
@@ -315,6 +328,9 @@ namespace AuralDesk
                 HqStatusText.Text = activeRate > 0
                     ? "已连接 · 升频 " + HqModeLabel(activeMode) + " " + FormatRate(activeRate)
                     : "已连接 · 升频";
+                // HQPlayer 里直接播本地文件时也能看到进度（第几首 / 共几首）
+                if (tracksTotal > 0)
+                    HqStatusText.Text += $" · {Math.Clamp(track + 1, 1, tracksTotal)}/{tracksTotal}";
                 NaaStatusText.Text = Lang.T("NAA · 已连接");
             }
             else
@@ -372,6 +388,8 @@ namespace AuralDesk
             fbPlayRequestTime = DateTime.MinValue;
             hqPrevState = -1;
             hqIsPlaying = false;
+            hqLastPlayPos = 0;
+            hqLastPlayLen = 0;
             // 主动停下时清掉起播看门狗：切歌后还要下载，不能被上一轮的时间戳带着往前走
             hqAwaitStart = false;
             hqPlayRequestTime = DateTime.MinValue;
@@ -928,6 +946,46 @@ namespace AuralDesk
             }
         }
 
+        // ---------------- HQPlayer 音量（dB） ----------------
+
+        private void HqVolumeBox_GotFocus(object sender, RoutedEventArgs e) => hqVolumeEditing = true;
+
+        private void HqVolumeBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            ApplyHqVolumeFromBox();
+            Keyboard.ClearFocus();
+        }
+
+        private void HqVolumeBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            hqVolumeEditing = false;
+            if (!ApplyHqVolumeFromBox())
+                HqVolumeBox.Text = hqVolume.ToString("0.#", CultureInfo.InvariantCulture);
+        }
+
+        private void HqVolMinus_Click(object sender, RoutedEventArgs e) => ApplyHqVolume(hqVolume - 1);
+        private void HqVolPlus_Click(object sender, RoutedEventArgs e) => ApplyHqVolume(hqVolume + 1);
+
+        private bool ApplyHqVolumeFromBox()
+        {
+            if (!double.TryParse(HqVolumeBox.Text.Trim(), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var v))
+                return false;
+            ApplyHqVolume(v);
+            return true;
+        }
+
+        /// <summary>设置 HQPlayer 音量；这是播放链路上的数字音量，和系统音量互不影响。</summary>
+        private void ApplyHqVolume(double db)
+        {
+            db = Math.Clamp(Math.Round(db, 1), -80, 20);
+            hqVolume = db;
+            if (HqVolumeBox != null)
+                HqVolumeBox.Text = db.ToString("0.#", CultureInfo.InvariantCulture);
+            _ = Task.Run(() => hqPlayer.SetVolume(db));
+        }
+
         // ------------------------------------------------------------------
         // 局域网遥控
         // ------------------------------------------------------------------
@@ -1034,6 +1092,14 @@ namespace AuralDesk
                     Position = pos,
                     Length = len,
                     Playing = NowPlaying,
+                    HqConnected = hqLastStatus != null,
+                    HqState = hqLastStatus?.State ?? 0,
+                    HqTrack = hqLastStatus?.Track ?? 0,
+                    HqTracksTotal = hqLastStatus?.TracksTotal ?? 0,
+                    HqVolume = hqLastStatus?.Volume ?? hqVolume,
+                    HqSong = hqLastStatus?.Song ?? "",
+                    HqMode = hqLastStatus?.ActiveMode ?? "",
+                    HqRate = hqLastStatus?.ActiveRate ?? 0,
                     Lang = Lang.IsEnglish ? "en" : "zh"
                 };
             });
@@ -1179,6 +1245,7 @@ namespace AuralDesk
                         isCurrent = i == currentQueueIndex,
                         isFav = queueTracks[i].IsFav,
                         cache = queueTracks[i].CacheState,
+                        download = queueTracks[i].DownloadProgress,
                         cached = !string.IsNullOrEmpty(queueTracks[i].QqMid) &&
                                  cachedMids.Contains(queueTracks[i].QqMid)
                     });
@@ -1194,7 +1261,7 @@ namespace AuralDesk
                 }
                 else if (UseFoobarOutput && fbStatus != null)
                 {
-                    pos = fbStatus.Position;
+                    pos = FbElapsedSeconds();
                     len = fbStatus.Duration > 0 ? fbStatus.Duration : totalDurationSeconds;
                 }
                 else if (systemPlayer.HasFile)
@@ -1235,6 +1302,14 @@ namespace AuralDesk
                     length = len,
                     queueTotal = queueTracks.Count,
                     queueMore = qstart + qcount < queueTracks.Count,
+                    hqConnected = hqLastStatus != null,
+                    hqState = hqLastStatus?.State ?? 0,
+                    hqTrack = hqLastStatus?.Track ?? 0,
+                    hqTracksTotal = hqLastStatus?.TracksTotal ?? 0,
+                    hqVolume = hqLastStatus?.Volume ?? hqVolume,
+                    hqSong = hqLastStatus?.Song ?? "",
+                    hqMode = hqLastStatus?.ActiveMode ?? "",
+                    hqRate = hqLastStatus?.ActiveRate ?? 0,
                     lang = Lang.IsEnglish ? "en" : "zh"
                 });
             });
@@ -1477,6 +1552,31 @@ namespace AuralDesk
                             break;
                         case "back":
                             QqBackBtn_Click(null!, new RoutedEventArgs());
+                            break;
+                        // ---- HQPlayer 直接遥控（本地音源在 HQPlayer 里播放时也能用手机操作） ----
+                        case "hqToggle":
+                            _ = HqPlayToggleAsync();
+                            break;
+                        case "hqNext":
+                            _ = Task.Run(() => { try { hqPlayer.Next(); } catch { } });
+                            break;
+                        case "hqPrev":
+                            _ = Task.Run(() => { try { hqPlayer.Previous(); } catch { } });
+                            break;
+                        case "hqStop":
+                            _ = Task.Run(() => { try { hqPlayer.Stop(); } catch { } });
+                            break;
+                        case "hqVolume":
+                            if (r.TryGetProperty("value", out var volEl))
+                            {
+                                var volDb = double.NaN;
+                                if (volEl.ValueKind == JsonValueKind.Number)
+                                    volDb = volEl.GetDouble();
+                                else if (!double.TryParse(volEl.GetString(), NumberStyles.Float,
+                                             CultureInfo.InvariantCulture, out volDb))
+                                    volDb = double.NaN;
+                                if (!double.IsNaN(volDb)) ApplyHqVolume(volDb);
+                            }
                             break;
                     }
                 }
@@ -1820,6 +1920,8 @@ namespace AuralDesk
                     }
                     hqIsPlaying = true;
                     hqPrevState = -1;
+                    hqLastPlayPos = 0;
+                    hqLastPlayLen = 0;
                     lastHqPoll = DateTime.MinValue;
                     hqPlayRequestTime = DateTime.UtcNow;
                     hqAwaitStart = true;
@@ -3042,37 +3144,29 @@ namespace AuralDesk
                 try
                 {
                     using var hc = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                    hc.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0");
+                    hc.DefaultRequestHeaders.UserAgent.ParseAdd(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36");
                     using var resp = await hc.GetAsync(url);
                     url = resp.RequestMessage?.RequestUri?.ToString() ?? url;
                 }
                 catch { }
             }
 
-            var mPlaylist = Regex.Match(url, @"(?:playlist|songlist)[/=](\d+)");
-            if (mPlaylist.Success && long.TryParse(mPlaylist.Groups[1].Value, out var pid))
+            // 歌曲链接优先（分享短链跳转后通常是 songDetail/{mid} 或带 songmid= 参数）
+            var songMid = "";
+            var mSongDetail = Regex.Match(url, @"songDetail/([0-9A-Za-z]+)", RegexOptions.IgnoreCase);
+            if (mSongDetail.Success) songMid = mSongDetail.Groups[1].Value;
+            if (songMid.Length == 0)
             {
-                qqBackTarget = "home";
-                qqTab = "playlists";
-                currentPlaylistId = pid;
-                currentPlaylistName = "链接歌单";
-                qqSongs.Clear();
-                QqHomeScroller.Visibility = Visibility.Collapsed;
-                QqSongScroller.Visibility = Visibility.Visible;
-                QqHomeBtn.Visibility = Visibility.Visible;
-                QqEmptyHint.Visibility = Visibility.Collapsed;
-                await LoadQqPlaylistSongsAsync(reset: true);
-                UpdateRandomPlayVisibility();
-                return;
+                var mSongMid = Regex.Match(url, @"[?&]songmid=([0-9A-Za-z]+)", RegexOptions.IgnoreCase);
+                if (mSongMid.Success) songMid = mSongMid.Groups[1].Value;
             }
-
-            var mSong = Regex.Match(url, @"(?:songDetail|song)[/=](\w+)");
-            if (mSong.Success)
+            if (songMid.Length > 0)
             {
-                var mid = mSong.Groups[1].Value;
-                var data = await qqApi.SearchAsync(mid, 1, 10);
+                var data = await qqApi.SearchAsync(songMid, 1, 10);
                 var songs = QqApiClient.ParseSongs(data);
-                var hit = songs.FirstOrDefault(s => s.Mid == mid) ?? songs.FirstOrDefault();
+                var hit = songs.FirstOrDefault(s => s.Mid == songMid) ?? songs.FirstOrDefault();
                 if (hit != null)
                 {
                     qqSongs.Clear();
@@ -3086,6 +3180,33 @@ namespace AuralDesk
                     QqListCountText.Text = Lang.T("1 首");
                     UpdateRandomPlayVisibility();
                 }
+                return;
+            }
+
+            // 歌单：playlist/123、playlist.html?...&id=123、分享链接 ...&id=123 都认
+            var pid = 0L;
+            var mIdQuery = Regex.Match(url, @"[?&](?:id|playlistid|songlistid|disstid)=(\d+)",
+                RegexOptions.IgnoreCase);
+            if (mIdQuery.Success)
+                long.TryParse(mIdQuery.Groups[1].Value, out pid);
+            if (pid <= 0)
+            {
+                var mPlaylist = Regex.Match(url, @"(?:playlist|songlist)/(\d+)", RegexOptions.IgnoreCase);
+                if (mPlaylist.Success) long.TryParse(mPlaylist.Groups[1].Value, out pid);
+            }
+            if (pid > 0)
+            {
+                qqBackTarget = "home";
+                qqTab = "playlists";
+                currentPlaylistId = pid;
+                currentPlaylistName = "链接歌单";
+                qqSongs.Clear();
+                QqHomeScroller.Visibility = Visibility.Collapsed;
+                QqSongScroller.Visibility = Visibility.Visible;
+                QqHomeBtn.Visibility = Visibility.Visible;
+                QqEmptyHint.Visibility = Visibility.Collapsed;
+                await LoadQqPlaylistSongsAsync(reset: true);
+                UpdateRandomPlayVisibility();
                 return;
             }
 
@@ -3408,7 +3529,9 @@ namespace AuralDesk
                 LogQqDebug("收藏失败: 歌曲缺少 ID " + song.Mid);
                 return;
             }
-            var target = !song.IsFav;
+            // 以服务端收藏集合为准：本地列表里同一首歌可能有多份拷贝（队列/收藏/搜索结果），
+            // 只看 song.IsFav 会拿到过期状态，表现就是「取消收藏反而又收藏了一次」
+            var target = !string.IsNullOrEmpty(song.Mid) ? !favMidSet.Contains(song.Mid) : !song.IsFav;
             try
             {
                 if (target)
@@ -4113,6 +4236,22 @@ namespace AuralDesk
         {
             if (sender is Button btn && btn.Tag is QqSongItem song)
                 await PlayQqSongWithPlaylistAsync(song);
+        }
+
+        /// <summary>流媒体列表右键：只把这一首插到当前播放项后面，不重建整个队列。</summary>
+        private void QqSongInsertToQueue_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem mi || mi.Tag is not QqSongItem song)
+                return;
+            var track = MakeQqTrack(song);
+            var insertAt = currentQueueIndex >= 0 && currentQueueIndex < queueTracks.Count
+                ? currentQueueIndex + 1
+                : queueTracks.Count;
+            queueTracks.Insert(insertAt, track);
+            if (currentQueueIndex < 0) currentQueueIndex = 0;
+            ApplyFavStateToLists();
+            SetStatus(string.Format(Lang.F("已插入到播放队列：{0}"), song.Title));
+            LogQqDebug(string.Format(Lang.F("插入播放队列: {0} @{1}"), song.Title, insertAt));
         }
 
         /// <summary>列表封面加载失败（无专辑图/404）时隐藏图片，露出占位音符图标。</summary>
@@ -6020,6 +6159,7 @@ namespace AuralDesk
                     if (hqFailCount >= 2)
                     {
                         SetHqConnected(false);
+                        hqLastStatus = null;
                         hqPrevState = -1;
                         hqAwaitStart = false;
                         hqPlayRequestTime = DateTime.MinValue;
@@ -6033,14 +6173,35 @@ namespace AuralDesk
                     return;
                 }
                 hqFailCount = 0;
-                SetHqConnected(true, status.ActiveRate, status.ActiveMode);
+                hqLastStatus = status;
+                SetHqConnected(true, status.ActiveRate, status.ActiveMode, status.Track, status.TracksTotal);
+                hqVolume = status.Volume;
+                if (!hqVolumeEditing && HqVolumeBox != null)
+                    HqVolumeBox.Text = hqVolume.ToString("0.#", CultureInfo.InvariantCulture);
                 bool wasPlaying = hqPrevState == 2;
                 var oldHqPlaying = hqIsPlaying;
                 hqPrevState = status.State;
                 hqIsPlaying = status.State == 2;
+                // 只在播放中记录有效位置/时长；HQPlayer 停止后会把这两个值清零
+                if (status.State == 2)
+                {
+                    if (status.Position > 0) hqLastPlayPos = status.Position;
+                    if (status.Length > 1) hqLastPlayLen = status.Length;
+                }
                 // 用户可能在 HQPlayer 里手动暂停/停止，这里把真实状态同步到播放键
                 if (oldHqPlaying != hqIsPlaying)
                     SyncPlayIcon();
+                // HQPlayer 里直接播本地文件（本软件队列为空）：把曲名同步到「正在播放」面板
+                if (status.State == 2 && queueTracks.Count == 0 &&
+                    !string.IsNullOrEmpty(status.Song) && status.Song != hqExternalSong)
+                {
+                    hqExternalSong = status.Song;
+                    UpdateNowPlayingInfo(status.Song, "", Lang.T("HQPlayer"));
+                }
+                else if (status.State != 2)
+                {
+                    hqExternalSong = "";
+                }
                 // 播放请求后长时间未进入播放状态（HQPlayer 加载卡住）→ 切下一首
                 // 只在「已经交给 HQPlayer、正在等它起播」时才计时：切歌后通常还要下载几十秒，
                 // 那段时间 HQPlayer 是停止态，用时间戳判断会误杀，导致队列一路抢跑到实际播放之前
@@ -6109,10 +6270,14 @@ namespace AuralDesk
                 }
                 // 自然播完：播放中位置到达文件末尾，或刚停止且最后位置接近末尾。
                 // 用户手动停止（位置在中间）不自动切下一首。
+                // 停止后 status.Length/Position 可能已经归零，用播放期间的残留值判断；
+                // 用 lastHqPosition 不行——上面「卡死检测」的 else 分支会先把它重置成 -1。
+                var knownLen = status.Length > 1 ? status.Length : hqLastPlayLen;
+                var knownPos = status.Position > 0 ? status.Position : hqLastPlayPos;
                 var finishedNaturally =
-                    wasPlaying &&
-                    ((status.State == 2 && status.Length > 0 && status.Position >= status.Length - 0.8) ||
-                     (status.State == 0 && status.Length > 0 && lastHqPosition >= status.Length - 2.0));
+                    wasPlaying && knownLen > 1 &&
+                    ((status.State == 2 && knownPos >= knownLen - 0.8) ||
+                     (status.State == 0 && knownPos >= knownLen - 3.0));
                 if (finishedNaturally)
                 {
                     hqPrevState = -1;

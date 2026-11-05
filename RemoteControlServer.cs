@@ -22,6 +22,15 @@ namespace AuralDesk
         public double Position { get; set; }
         public double Length { get; set; }
         public bool Playing { get; set; }
+        // HQPlayer 自身状态（手机端遥控本地播放用）
+        public bool HqConnected { get; set; }
+        public int HqState { get; set; }
+        public int HqTrack { get; set; }
+        public int HqTracksTotal { get; set; }
+        public double HqVolume { get; set; }
+        public string HqSong { get; set; } = "";
+        public string HqMode { get; set; } = "";
+        public long HqRate { get; set; }
     }
 
     /// <summary>遥控接口返回的队列项。</summary>

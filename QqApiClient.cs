@@ -503,6 +503,15 @@ namespace AuralDesk
             return CloneData(doc);
         }
 
+        /// <summary>账号收藏的歌单（和「我创建的」是两个独立接口）。</summary>
+        public async Task<JsonElement> GetFavSonglistsAsync(int page = 1, int num = 50)
+        {
+            var euin = EncryptUin ?? _uin.ToString();
+            using var doc = await GetJsonAsync(
+                $"/user/{Uri.EscapeDataString(euin)}/fav/songlists?page={page}&num={num}");
+            return CloneData(doc);
+        }
+
         public async Task<JsonElement> GetSonglistDetailAsync(long songlistId, int page, int num = 30)
         {
             using var doc = await GetJsonAsync($"/songlist/{songlistId}/detail?page={page}&num={num}");
@@ -645,14 +654,23 @@ namespace AuralDesk
                 url = "https://dl.stream.qqmusic.qq.com/" + url;
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Referrer = new Uri("https://y.qq.com/");
-            req.Headers.UserAgent.ParseAdd(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+            req.Headers.UserAgent.ParseAdd(BrowserUserAgent);
             if (!string.IsNullOrEmpty(_credentialCookie))
                 req.Headers.TryAddWithoutValidation("Cookie", _credentialCookie);
             using var resp = await _http.SendAsync(req);
             if (!resp.IsSuccessStatusCode)
                 return null;
             return await resp.Content.ReadAsByteArrayAsync();
+        }
+
+        /// <summary>CDN 校验比较严，统一带浏览器 UA（采集/下载两条路径一致）。</summary>
+        private const string BrowserUserAgent =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+
+        private static string SafeHost(string url)
+        {
+            try { return new Uri(url).Host; }
+            catch { return "?"; }
         }
 
         /// <summary>
@@ -674,10 +692,18 @@ namespace AuralDesk
                 if (!string.IsNullOrEmpty(_credentialCookie))
                     probe.Headers.TryAddWithoutValidation("Cookie", _credentialCookie);
                 probe.Headers.Referrer = new Uri("https://y.qq.com/");
+                probe.Headers.UserAgent.ParseAdd(BrowserUserAgent);
+                // 只取首字节：避免把 hi-res 整首拉两遍，也兼容只接受 Range 请求的加密音源 CDN
+                probe.Headers.Range = new RangeHeaderValue(0, 0);
                 using var presp = await _http.SendAsync(probe, HttpCompletionOption.ResponseHeadersRead);
                 if (!presp.IsSuccessStatusCode)
-                    return null;
-                total = presp.Content.Headers.ContentLength ?? 0;
+                {
+                    AppLog.Write($"CDN 探测失败 HTTP {(int)presp.StatusCode} host={SafeHost(url)}");
+                    // 有的 CDN 拒绝 Range 探测但允许整包下载，退回单连接再试一次
+                    return await DownloadAsync(url);
+                }
+                total = presp.Content.Headers.ContentRange?.Length
+                        ?? presp.Content.Headers.ContentLength ?? 0;
                 if (total <= 0 || total > 200L * 1024 * 1024)
                     return await DownloadAsync(url);
             }
@@ -706,6 +732,7 @@ namespace AuralDesk
                     if (!string.IsNullOrEmpty(_credentialCookie))
                         req.Headers.TryAddWithoutValidation("Cookie", _credentialCookie);
                     req.Headers.Referrer = new Uri("https://y.qq.com/");
+                    req.Headers.UserAgent.ParseAdd(BrowserUserAgent);
                     req.Headers.Range = new RangeHeaderValue(start, end);
                     using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
                     if (resp.StatusCode != HttpStatusCode.PartialContent)

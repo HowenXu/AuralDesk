@@ -21,7 +21,7 @@ The whole point of the app is to make "streaming upsampling" smooth and pleasant
 **How is this different from "QQ Music UPnP → foobar2000 → HQPlayer"?**
 
 - QQ Music's UPnP path does **not** support Hi-Res (usually capped at 48 kHz). AuralDesk does: Hi-Res sources are downloaded and decrypted locally (verified 96 kHz end-to-end) and handed to HQPlayer unshortened in sample rate and bit depth.
-- No foobar2000 in the middle: download → decrypt → cache → upsample in one flow, with full playlists, automatic next/previous caching, and buffer cleanup.
+- No foobar2000 needed in the middle: download → decrypt → cache → upsample in one flow, with full playlists, automatic next/previous caching, and buffer cleanup. (foobar2000 is still available as an *optional* output backend — see below.)
 
 ## Why HQPlayer is not bundled inside AuralDesk
 
@@ -40,7 +40,8 @@ So AuralDesk is the *player + streaming front-end*, and HQPlayer remains the *up
 - **Three quality tiers**: Hi-Res / Lossless / Normal, classified by the *actual* sample rate of the downloaded file (Hi-Res is mostly 96 kHz; falls back to lossless when no Hi-Res master exists — never to the marketing upsample tiers).
 - **Built-in decryption**: QMC files are decrypted offline by our own [qmc-decrypt](https://github.com/HowenXu/qmc-decrypt) (pure Python, zero deps, ships with the app).
 - **HQPlayer integration**: PCM/DSD upsampling via NAA or USB-exclusive; can auto-detect and launch HQPlayer.
-- **Output**: HQPlayer or system output, switch on the fly.
+- **Output**: HQPlayer, system output, or foobar2000 (optional) — switch on the fly.
+- **HQPlayer remote**: reads HQPlayer's playback state, track index and volume; both the desktop app and the phone remote can set its digital volume in dB.
 - **Lyrics & covers**: scrolling synced lyrics with translations; album and artist pages with artwork.
 - **Play queue**: full-playlist loading, shuffle, reorder/multi-delete, automatic next/previous caching with configurable buffer size & folder.
 - **Android remote**: scan-and-connect over your LAN; control playback/queue/search/favorites, media-session notifications.
@@ -71,6 +72,8 @@ Settings → Quality: Hi-Res / Lossless / Normal.
 
 - **System output**: quick local audition.
 - **HQPlayer**: configure upsampling/output (NAA or USB-exclusive) in HQPlayer itself; AuralDesk feeds it the full lossless file for real-time upsampling. An "auto-start HQPlayer" option is available under settings.
+- **foobar2000** (optional): uses the [beefweb](https://github.com/hyperblast/beefweb) component. Install beefweb into foobar2000, keep foobar running, then pick `foobar2000` as the output. foobar2000 owns the actual output — WASAPI exclusive, DSP chain and device selection all stay in foobar2000. AuralDesk only tells it which complete file to play.
+- **Note on foobar2000 testing**: I don't use foobar2000 myself (my chain is HQPlayer → NAA), so this output path is the least tested part of the app. If it misbehaves, please open an issue — reports are welcome, fixes may take a while.
 
 ### 5. Daily use
 

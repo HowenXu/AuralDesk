@@ -61,4 +61,7 @@
     <string name="move_down">下移</string>
     <string name="update_title">发现新版本</string>
     <string name="update_msg">检测到新版本 v%1$s，是否前往发布页下载？</string>
+    <string name="hq_playing">播放中</string>
+    <string name="hq_paused">已暂停</string>
+    <string name="hq_volume_title">HQPlayer 音量（dB）</string>
 </resources>
