@@ -13,8 +13,8 @@ android {
         applicationId = "com.auraldesk.remote"
         minSdk = 26
         targetSdk = 36
-    versionCode = 33
-    versionName = "0.1.53"
+    versionCode = 34
+    versionName = "0.1.54"
     }
 
     signingConfigs {

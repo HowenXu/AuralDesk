@@ -148,6 +148,8 @@ namespace AuralDesk
         private readonly List<QqSongInfo> qqSongCache = new();
         private readonly object qqSongLock = new();
         private readonly Dictionary<string, double> qqDownloadProgress = new();
+        // 并发下载时多首歌可能同时取同一张专辑封面，用线程安全字典
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]?> coverBytesCache = new();
         /// <summary>主页推荐卡片。</summary>
         public sealed class QqHomeCard
         {
@@ -5230,12 +5232,14 @@ namespace AuralDesk
                     {
                         LogQqDebug(string.Format(Lang.F("OGG 已转 FLAC（HQPlayer 可播）: {0}"), Path.GetFileName(flacFile)));
                         RemoveLowerQualitySiblings(CacheDir, song.Mid, flacFile);
+                        await TagDownloadedFileAsync(flacFile, song);
                         return (flacFile, qualityName);
                     }
                     LogQqDebug("OGG 转 FLAC 失败，保留原文件: " + song.Title);
                     var oggFile = Path.Combine(CacheDir, $"{song.Mid}_{SanitizeFileName(song.Title)}.ogg");
                     await File.WriteAllBytesAsync(oggFile, bytes);
                     RemoveLowerQualitySiblings(CacheDir, song.Mid, oggFile);
+                    await TagDownloadedFileAsync(oggFile, song);
                     return (oggFile, qualityName);
                 }
                 var file = Path.Combine(CacheDir, $"{song.Mid}_{SanitizeFileName(song.Title)}.{ext}");
@@ -5243,6 +5247,7 @@ namespace AuralDesk
                 LogQqDebug(string.Format(Lang.F("已缓存: {0} ({1} 字节)"), file, bytes.Length));
                 // 之前降级下载留下的低音质副本（比如 mp3）要删掉，否则下次缓存命中会挑到旧的
                 RemoveLowerQualitySiblings(CacheDir, song.Mid, file);
+                await TagDownloadedFileAsync(file, song);
                 return (file, qualityName);
             }
             catch (Exception ex)
@@ -5367,6 +5372,41 @@ namespace AuralDesk
             }
             catch { }
         }
+
+        /// <summary>下载专辑封面（按 albumMid 缓存，500 图失败再退 300）。</summary>
+        private async Task<byte[]?> GetCoverBytesAsync(QqSongItem song)
+        {
+            var mid = song.AlbumMid;
+            if (string.IsNullOrWhiteSpace(mid)) return null;
+            if (coverBytesCache.TryGetValue(mid, out var cached)) return cached;
+
+            var bytes = await qqApi.DownloadImageAsync(
+                $"https://y.gtimg.cn/music/photo_new/T002R500x500M000{mid}.jpg");
+            if (bytes == null)
+                bytes = await qqApi.DownloadImageAsync(
+                    $"https://y.gtimg.cn/music/photo_new/T002R300x300M000{mid}.jpg");
+            coverBytesCache[mid] = bytes;
+            return bytes;
+        }
+
+        /// <summary>给刚下载的文件写入标题/歌手/专辑和封面；失败不影响播放。</summary>
+        private async Task TagDownloadedFileAsync(string file, QqSongItem song)
+        {
+            try
+            {
+                var cover = await GetCoverBytesAsync(song);
+                var ok = await Task.Run(() => AudioTagger.Tag(file, song, cover));
+                LogQqDebug(string.Format("元数据{0}: {1}{2}",
+                    ok ? "已写入" : "写入失败",
+                    Path.GetFileName(file),
+                    cover != null ? "（含封面）" : "（无封面）"));
+            }
+            catch (Exception ex)
+            {
+                LogQqDebug("元数据写入异常: " + ex.Message);
+            }
+        }
+
         /// <summary>按歌曲 Mid 查找缓存目录中已下载的文件（文件名格式 {mid}_{标题}）。</summary>
         private string? FindCachedFile(string mid)
         {

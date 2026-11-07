@@ -663,6 +663,25 @@ namespace AuralDesk
             return await resp.Content.ReadAsByteArrayAsync();
         }
 
+        /// <summary>下载专辑封面等图片（和音频一样直连 CDN，不走系统代理）。</summary>
+        public async Task<byte[]?> DownloadImageAsync(string url)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Referrer = new Uri("https://y.qq.com/");
+                req.Headers.UserAgent.ParseAdd(BrowserUserAgent);
+                using var resp = await _http.SendAsync(req);
+                if (!resp.IsSuccessStatusCode) return null;
+                var bytes = await resp.Content.ReadAsByteArrayAsync();
+                return bytes.Length > 0 ? bytes : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         /// <summary>CDN 校验比较严，统一带浏览器 UA（采集/下载两条路径一致）。</summary>
         private const string BrowserUserAgent =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
