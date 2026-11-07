@@ -12,7 +12,21 @@
     <sys:String x:Key="navStream">Stream</sys:String>
     <sys:String x:Key="outHqConfigureHint">Configure output &amp; upsampling in HQPlayer</sys:String>
     <sys:String x:Key="outNaa">HQPlayer</sys:String>
-    <sys:String x:Key="outFoobar">foobar2000</sys:String>
+    <sys:String x:Key="chainSource">Source</sys:String>
+    <sys:String x:Key="chainMode">Mode</sys:String>
+    <sys:String x:Key="chainShaper">Shaping</sys:String>
+    <sys:String x:Key="chainRate">Rate</sys:String>
+    <sys:String x:Key="chainDevice">Output</sys:String>
+    <sys:String x:Key="播放中">Playing</sys:String>
+    <sys:String x:Key="暂停">Paused</sys:String>
+    <sys:String x:Key="停止中">Stopping</sys:String>
+    <sys:String x:Key="已停止">Stopped</sys:String>
+    <sys:String x:Key="抖动">Dither</sys:String>
+    <sys:String x:Key="系统输出">System output</sys:String>
+    <sys:String x:Key="待播放">Idle</sys:String>
+    <sys:String x:Key="未找到设备">device not found</sys:String>
+    <sys:String x:Key="远程主机">Remote host</sys:String>
+    <sys:String x:Key="outFoobar">Foobar2000</sys:String>
     <sys:String x:Key="outSystemOutput">System output</sys:String>
     <sys:String x:Key="queueView">Play Queue</sys:String>
     <sys:String x:Key="settingsLang">Language</sys:String>
@@ -266,8 +280,8 @@
     <sys:String x:Key="还没有创建或收藏过歌单">No created or saved playlists yet</sys:String>
     <sys:String x:Key="已取消收藏：{0}">Removed from favourites: {0}</sys:String>
     <sys:String x:Key="已收藏：{0}">Added to favourites: {0}</sys:String>
-    <sys:String x:Key="foobar2000 播放：{0}">Playing via foobar2000: {0}</sys:String>
-    <sys:String x:Key="foobar2000 连接已断开">foobar2000 connection lost</sys:String>
-    <sys:String x:Key="foobar2000 播放失败：请确认 foobar2000 已启动并安装 beefweb 插件">foobar2000 playback failed - make sure foobar2000 is running with the beefweb component installed</sys:String>
-    <sys:String x:Key="已把缓存目录加入 beefweb 白名单，请重启 foobar2000 后重试">Cache folder added to the beefweb whitelist - restart foobar2000 and try again</sys:String>
+    <sys:String x:Key="Foobar2000 播放：{0}">Playing via Foobar2000: {0}</sys:String>
+    <sys:String x:Key="Foobar2000 连接已断开">Foobar2000 connection lost</sys:String>
+    <sys:String x:Key="Foobar2000 播放失败：请确认 Foobar2000 已启动并安装 beefweb 插件">Foobar2000 playback failed - make sure Foobar2000 is running with the beefweb component installed</sys:String>
+    <sys:String x:Key="已把缓存目录加入 beefweb 白名单，请重启 Foobar2000 后重试">Cache folder added to the beefweb whitelist - restart Foobar2000 and try again</sys:String>
 </ResourceDictionary>

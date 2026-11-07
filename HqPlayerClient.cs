@@ -21,7 +21,32 @@ namespace AuralDesk
         public string ActiveMode = "";  // 例如 "SDM (DSD)" / "PCM" / "[source]"
         public string ActiveFilter = "";
         public string ActiveShaper = "";
+        public double ProcessSpeed;      // 处理倍速（>1 才追得上实时）
+        public int ActiveBits;
+        public int ActiveChannels;
         public string Song = "";
+    }
+
+    /// <summary>HQPlayer 当前配置的处理链（来自 &lt;State/&gt;，数值都是枚举列表的 index）。</summary>
+    public sealed class HqPlayerState
+    {
+        public int State;
+        public int Mode;
+        public int Filter1x;
+        public int FilterNx;
+        public int Shaper;
+        public int Rate;
+        public double Volume;
+        public int ActiveMode;
+        public long ActiveRate;
+    }
+
+    /// <summary>枚举列表项（Modes / Filters / Shapers / Rates）。Index 是 Set* 要用的值。</summary>
+    public sealed class HqListEntry
+    {
+        public int Index;
+        public string Name = "";
+        public long Rate;
     }
 
     public sealed class HqPlayerClient
@@ -173,7 +198,10 @@ namespace AuralDesk
                     ActiveRate = GetLong(root, "active_rate"),
                     ActiveMode = GetAttr(root, "active_mode"),
                     ActiveFilter = GetAttr(root, "active_filter"),
-                    ActiveShaper = GetAttr(root, "active_shaper")
+                    ActiveShaper = GetAttr(root, "active_shaper"),
+                    ProcessSpeed = GetDouble(root, "process_speed"),
+                    ActiveBits = GetInt(root, "active_bits"),
+                    ActiveChannels = GetInt(root, "active_channels")
                 };
                 var meta = root.Element("metadata");
                 if (meta != null) st.Song = GetAttr(meta, "song");
@@ -182,6 +210,99 @@ namespace AuralDesk
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>读当前配置的处理链。注意 filter/shaper/rate/mode 都是枚举列表的 index。</summary>
+        public HqPlayerState? GetState()
+        {
+            var resp = SendCommand("<?xml version=\"1.0\"?><State/>");
+            if (string.IsNullOrEmpty(resp)) return null;
+            try
+            {
+                var root = XDocument.Parse(resp).Root;
+                if (root == null || root.Name.LocalName != "State") return null;
+                return new HqPlayerState
+                {
+                    State = GetInt(root, "state"),
+                    Mode = GetInt(root, "mode"),
+                    Filter1x = GetInt(root, "filter1x"),
+                    FilterNx = GetInt(root, "filterNx") != 0 ? GetInt(root, "filterNx") : GetInt(root, "filter"),
+                    Shaper = GetInt(root, "shaper"),
+                    Rate = GetInt(root, "rate"),
+                    Volume = GetDouble(root, "volume"),
+                    ActiveMode = GetInt(root, "active_mode"),
+                    ActiveRate = GetLong(root, "active_rate")
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private readonly System.Collections.Generic.Dictionary<string, List<HqListEntry>> listCache = new();
+        private readonly System.Collections.Generic.Dictionary<string, DateTime> listCacheTime = new();
+
+        /// <summary>
+        /// 读 Modes / Filters / Shapers / Rates 枚举。列表随输出模式变化，缓存 60 秒；
+        /// 切换模式后调用 <see cref="InvalidateLists"/> 让下次重新拉取。
+        /// </summary>
+        public List<HqListEntry> GetList(string kind, bool refresh = false)
+        {
+            lock (sync)
+            {
+                if (!refresh && listCache.TryGetValue(kind, out var cached)
+                    && DateTime.UtcNow - listCacheTime[kind] < TimeSpan.FromSeconds(60))
+                    return cached;
+
+                var cmd = kind switch
+                {
+                    "modes" => "<GetModes/>",
+                    "filters" => "<GetFilters/>",
+                    "shapers" => "<GetShapers/>",
+                    "rates" => "<GetRates/>",
+                    _ => null
+                };
+                if (cmd == null) return new List<HqListEntry>();
+
+                var result = new List<HqListEntry>();
+                var resp = SendCommand("<?xml version=\"1.0\"?>" + cmd);
+                if (!string.IsNullOrEmpty(resp))
+                {
+                    try
+                    {
+                        var root = XDocument.Parse(resp).Root;
+                        if (root != null)
+                        {
+                            foreach (var el in root.Elements())
+                            {
+                                result.Add(new HqListEntry
+                                {
+                                    Index = GetInt(el, "index"),
+                                    Name = GetAttr(el, "name"),
+                                    Rate = GetLong(el, "rate")
+                                });
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // 解析失败返回空表，下次再试
+                    }
+                }
+                listCache[kind] = result;
+                listCacheTime[kind] = DateTime.UtcNow;
+                return result;
+            }
+        }
+
+        public void InvalidateLists()
+        {
+            lock (sync)
+            {
+                listCache.Clear();
+                listCacheTime.Clear();
             }
         }
 

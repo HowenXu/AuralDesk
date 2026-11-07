@@ -43,46 +43,182 @@
                             Style="{StaticResource NavButtonStyle}" Content="{DynamicResource navSettings}"/>
                 </StackPanel>
 
-                <!-- HQPlayer status card -->
+                <!-- 输出链路卡片（HQPlayer / Foobar2000 / 系统输出） -->
                 <Border DockPanel.Dock="Bottom" CornerRadius="10" Background="{StaticResource BgCardBrush}"
-                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="12,10">
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="10,8,10,9">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="HqStatusDot" Width="8" Height="8" Fill="{StaticResource TextDimBrush}"
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Ellipse x:Name="HqStatusDot" Width="6" Height="6" Fill="{StaticResource TextDimBrush}"
                                      VerticalAlignment="Center"/>
-                            <TextBlock Text="HQPlayer" FontSize="12" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="8,0,0,0"/>
+                            <TextBlock Grid.Column="1" x:Name="HqChainTitle" Text="HQPlayer" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="6,0,0,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" x:Name="HqChainSpeed" Text="" FontSize="8"
+                                       Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock x:Name="HqStatusText" Text="{DynamicResource hqStatusNotConnected}" FontSize="8.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,1,0,0"
+                                   TextTrimming="CharacterEllipsis"/>
+
+                        <StackPanel Margin="0,6,0,0">
+                            <!-- 源：实际节点 -->
+                            <Grid x:Name="HqRowSource" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <Ellipse Grid.Column="0" Width="5" Height="5" Fill="{StaticResource AccentBrush}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource chainSource}" FontSize="8"
+                                           Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="HqChainSource" Text="—" FontSize="9"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                            <!-- 模式：内部处理，虚线无点 -->
+                            <Grid x:Name="HqRowMode" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource chainMode}" FontSize="8"
+                                           Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="HqChainMode" Text="—" FontSize="9"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid x:Name="HqRow1x" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <TextBlock Grid.Column="1" Text="1x" FontSize="8"
+                                           Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="HqChainFilter1x" Text="—" FontSize="9"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid x:Name="HqRowNx" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <TextBlock Grid.Column="1" Text="Nx" FontSize="8"
+                                           Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="HqChainFilterNx" Text="—" FontSize="9"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid x:Name="HqRowShaper" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <TextBlock Grid.Column="1" x:Name="HqChainShaperLabel" Text="{DynamicResource chainShaper}"
+                                           FontSize="8" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="HqChainShaper" Text="—" FontSize="9"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                            <!-- 升频结果：内部处理，虚线无点，数值加黑 -->
+                            <Grid x:Name="HqRowRate" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <Ellipse Grid.Column="0" Width="5" Height="5" Fill="{StaticResource AccentBrush}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource chainRate}" FontSize="8"
+                                           Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="HqChainRate" Text="—" FontSize="9"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                            <!-- 输出：实际节点 -->
+                            <Grid x:Name="HqRowDevice" MinHeight="15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Grid.Column="0" Data="M 0,0 L 0,1" Stretch="Fill"
+                                      Stroke="{StaticResource TextDimBrush}" Opacity="0.45" StrokeThickness="1"
+                                      StrokeDashArray="2 2" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                                <Ellipse Grid.Column="0" Width="5" Height="5" Fill="{StaticResource AccentBrush}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource chainDevice}" FontSize="8"
+                                           Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <TextBlock x:Name="HqChainDevice" Text="—" FontSize="9"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="HqChainDeviceDetail" Text="" FontSize="8"
+                                               Foreground="{StaticResource TextDimBrush}"
+                                               TextWrapping="Wrap" Margin="0,1,0,0"/>
+                                    <TextBlock x:Name="HqChainDeviceState" Text="" FontSize="8"
+                                               Foreground="{StaticResource WarnBrush}"
+                                               Margin="0,1,0,0" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
-                        <TextBlock x:Name="HqStatusText" Text="{DynamicResource hqStatusNotConnected}" FontSize="10.5"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0"/>
                     </StackPanel>
                 </Border>
-
                 <!-- System stats (toggleable in Settings) -->
                 <Border x:Name="SystemStatsCard" DockPanel.Dock="Bottom" Visibility="Collapsed"
                         CornerRadius="10" Background="{StaticResource BgCardBrush}"
-                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="12,10"
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="10,8,10,9"
                         Margin="0,8,0,0">
                     <StackPanel>
-                        <TextBlock Text="{DynamicResource sysResources}" FontSize="12" FontWeight="SemiBold"
+                        <TextBlock Text="{DynamicResource sysResources}" FontSize="10" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <Grid x:Name="MemRow" Margin="0,8,0,0">
+                        <Grid x:Name="MemRow" Margin="0,6,0,0" MinHeight="15">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="{DynamicResource sysMemory}" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
-                            <TextBlock x:Name="MemValue" Grid.Column="1" FontSize="10.5"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{DynamicResource sysMemory}" FontSize="8"
+                                       Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="MemValue" Grid.Column="1" FontSize="9"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </Grid>
-                        <Grid x:Name="CpuRow" Margin="0,4,0,0">
+                        <Grid x:Name="CpuRow" Margin="0,2,0,0" MinHeight="15">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="{DynamicResource sysCpu}" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
-                            <TextBlock x:Name="CpuValue" Grid.Column="1" FontSize="10.5"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{DynamicResource sysCpu}" FontSize="8"
+                                       Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CpuValue" Grid.Column="1" FontSize="9"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </Grid>
                     </StackPanel>
                 </Border>

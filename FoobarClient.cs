@@ -145,6 +145,35 @@ namespace AuralDesk
             return result;
         }
 
+        /// <summary>当前 foobar2000 实际使用的输出（类型 · 设备名）；读不到返回空串。</summary>
+        public string GetActiveOutputDescription()
+        {
+            var json = GetJson("/api/outputs");
+            var outputs = json?["outputs"];
+            if (outputs == null) return "";
+            var activeDeviceId = outputs["active"]?["deviceId"]?.GetValue<string>() ?? "";
+            if (string.IsNullOrEmpty(activeDeviceId)) return "";
+
+            var deviceName = "";
+            if (outputs["types"] is JsonArray types)
+            {
+                foreach (var type in types)
+                {
+                    if (type?["devices"] is not JsonArray devices) continue;
+                    foreach (var device in devices)
+                    {
+                        if (device?["id"]?.GetValue<string>() != activeDeviceId) continue;
+                        deviceName = device?["name"]?.GetValue<string>() ?? "";
+                        break;
+                    }
+                    if (!string.IsNullOrEmpty(deviceName)) break;
+                }
+            }
+            if (string.IsNullOrEmpty(deviceName)) return "";
+            // 只返回设备本身；beefweb 的 type 名（"Output"）对用户没有意义
+            return deviceName;
+        }
+
         /// <summary>切换 foobar2000 的输出设备（独占变体即传入名字带 [exclusive] 的那一项）。</summary>
         public bool SetOutputDevice(string deviceId)
         {

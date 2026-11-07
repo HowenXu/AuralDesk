@@ -45,6 +45,14 @@ namespace AuralDesk
         private bool hqVolumeEditing;
         private HqPlayerStatus? hqLastStatus;
         private string hqExternalSong = "";
+        private HqPlayerState? hqChainState;
+        private List<HqListEntry> hqFilters = new();
+        private List<HqListEntry> hqShapers = new();
+        private List<HqListEntry> hqRates = new();
+        private List<HqListEntry> hqModes = new();
+        private int hqChainModeSeen = -1;
+        private DateTime lastHqChainPoll = DateTime.MinValue;
+        private DateTime lastHqRatesPoll = DateTime.MinValue;
         private bool browserHooked;      // WebView2 事件只绑一次
         private bool browserScriptAdded; // 注入脚本只注册一次
         private readonly HqPlayerClient hqPlayer;
@@ -88,6 +96,8 @@ namespace AuralDesk
         private DateTime fbPlayRequestTime = DateTime.MinValue;
         private FoobarStatus? fbStatus;
         private int fbFailCount;
+        private string foobarActiveOutput = "";
+        private DateTime lastFoobarOutputPoll = DateTime.MinValue;
         private readonly RemoteControlServer remoteControl = new();
         private DateTime lastResumeSave = DateTime.MinValue;
         private readonly HttpClient httpClient = new();
@@ -198,6 +208,8 @@ namespace AuralDesk
             ShowView("stream");
             ApplySettings();
             loaded = true;
+            // 启动时立即按保存的输出方式渲染卡片，避免先闪一下 HQPlayer 默认样式
+            UpdateChainCard();
             ApplyRemoteControl();
             Loaded += (_, _) => Dispatcher.BeginInvoke(new Action(CheckForUpdatesOnStart));
             statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -354,6 +366,251 @@ namespace AuralDesk
             return activeMode.Trim();
         }
 
+        // ------------------------------------------------------------------
+        // HQPlayer 处理链卡片
+        // ------------------------------------------------------------------
+
+        private static string HqStateWord(int state) => state switch
+        {
+            2 => Lang.T("播放中"),
+            1 => Lang.T("暂停"),
+            3 => Lang.T("停止中"),
+            _ => Lang.T("已停止")
+        };
+
+        private string HqListName(List<HqListEntry> list, int index)
+        {
+            foreach (var e in list)
+                if (e.Index == index && !string.IsNullOrEmpty(e.Name))
+                    return e.Name;
+            return "";
+        }
+
+        /// <summary>
+        /// 把后端/地址/设备拼成一行：段与段之间用 " · "，段内空格换成不换行空格，
+        /// 这样 TextWrapping 只会在 "·" 处换行，不会把 "Audalytic DR70" 这类名字劈开。
+        /// 太长的段（例如 WASAPI 的 GUID）保留普通空格，允许正常换行。
+        /// </summary>
+        private static string JoinDetail(params string[] parts)
+        {
+            var segments = new List<string>();
+            foreach (var part in parts)
+            {
+                if (string.IsNullOrWhiteSpace(part)) continue;
+                foreach (var seg in part.Split(" · ",
+                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    segments.Add(seg.Length <= 26 ? seg.Replace(" ", "\u00A0") : seg);
+                }
+            }
+            // 分隔符写成「空格 + · + 不换行空格」：需要换行时断在 · 前面，
+            // 让「· hw:CARD=...」整段落到下一行，而不是把 · 留在行尾。
+            return string.Join(" \u00B7\u00A0", segments);
+        }
+
+        private sealed class HqChainSnapshot
+        {
+            public HqPlayerStatus? Status;
+            public HqPlayerState? State;
+            public List<HqListEntry>? Filters;
+            public List<HqListEntry>? Shapers;
+            public List<HqListEntry>? Rates;
+            public List<HqListEntry>? Modes;
+        }
+
+        /// <summary>拉一次 HQPlayer 状态 + 处理链枚举并刷新卡片（后台线程发命令，回到 UI 线程渲染）。</summary>
+        private async Task<bool> RefreshHqChainAsync(bool forceLists = false)
+        {
+            var snap = await Task.Run(() =>
+            {
+                var status = hqPlayer.GetStatus();
+                if (status == null) return new HqChainSnapshot();
+                var st = hqPlayer.GetState();
+                if (st != null && st.Mode != hqChainModeSeen)
+                {
+                    hqPlayer.InvalidateLists();
+                    hqChainModeSeen = st.Mode;
+                }
+                var refreshRates = forceLists ||
+                    (DateTime.UtcNow - lastHqRatesPoll).TotalSeconds > 2;
+                if (refreshRates) lastHqRatesPoll = DateTime.UtcNow;
+                return new HqChainSnapshot
+                {
+                    Status = status,
+                    State = st,
+                    Filters = hqPlayer.GetList("filters", forceLists),
+                    Shapers = hqPlayer.GetList("shapers", forceLists),
+                    Rates = hqPlayer.GetList("rates", refreshRates),
+                    Modes = hqPlayer.GetList("modes", forceLists)
+                };
+            });
+
+            if (snap.Status == null)
+            {
+                hqLastStatus = null;
+                hqChainState = null;
+                UpdateChainCard();
+                return false;
+            }
+            hqLastStatus = snap.Status;
+            hqChainState = snap.State;
+            if (snap.Filters != null) hqFilters = snap.Filters;
+            if (snap.Shapers != null) hqShapers = snap.Shapers;
+            if (snap.Rates != null) hqRates = snap.Rates;
+            if (snap.Modes != null) hqModes = snap.Modes;
+            UpdateChainCard();
+            return true;
+        }
+
+        /// <summary>当前音源格式（卡片「源」行）：优先队列歌曲实际解析出的规格。</summary>
+        private string CurrentSourceText(HqPlayerStatus? hqStatus = null)
+        {
+            var cur = currentQueueIndex >= 0 && currentQueueIndex < queueTracks.Count
+                ? queueTracks[currentQueueIndex]
+                : null;
+            var source = cur?.QualityName ?? "";
+            var sep = source.LastIndexOf(" · ", StringComparison.Ordinal);
+            if (sep >= 0) source = source[(sep + 3)..];
+            if (string.IsNullOrEmpty(source)) source = hqStatus?.Song ?? "";
+            return string.IsNullOrEmpty(source) ? "—" : source;
+        }
+
+        /// <summary>按当前输出方式（HQPlayer / Foobar2000 / 系统输出）刷新左下角链路卡片。</summary>
+        private void UpdateChainCard()
+        {
+            if (HqChainSource == null) return;
+            if (UseFoobarOutput) { RenderFoobarChain(); return; }
+            if (!UseHqOutput) { RenderSystemChain(); return; }
+            RenderHqChain(hqLastStatus);
+        }
+
+        /// <summary>模式/滤波/调制/升频属于内部处理，切到 foobar 或系统输出时整行收起。</summary>
+        private void ShowHqProcessingRows(bool show)
+        {
+            var vis = show ? Visibility.Visible : Visibility.Collapsed;
+            HqRowMode.Visibility = vis;
+            HqRow1x.Visibility = vis;
+            HqRowNx.Visibility = vis;
+            HqRowShaper.Visibility = vis;
+            HqRowRate.Visibility = vis;
+        }
+
+        private void RenderHqChain(HqPlayerStatus? status)
+        {
+            HqChainTitle.Text = "HQPlayer";
+            ShowHqProcessingRows(true);
+            if (status == null)
+            {
+                HqChainSpeed.Text = "";
+                HqChainSource.Text = "—";
+                HqChainMode.Text = "—";
+                HqChainFilter1x.Text = "—";
+                HqChainFilterNx.Text = "—";
+                HqChainShaper.Text = "—";
+                HqChainRate.Text = "—";
+                HqChainDevice.Text = "—";
+                HqChainDeviceDetail.Text = "";
+                HqChainDeviceState.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var cfg = hqChainState;
+            var modeName = cfg != null ? HqListName(hqModes, cfg.Mode) : "";
+            if (string.IsNullOrEmpty(modeName)) modeName = status.ActiveMode;
+            var isPcm = modeName.Contains("PCM", StringComparison.OrdinalIgnoreCase);
+
+            HqChainSource.Text = CurrentSourceText(status);
+            HqChainMode.Text = string.IsNullOrEmpty(modeName) ? "—" : modeName;
+
+            var f1x = cfg != null ? HqListName(hqFilters, cfg.Filter1x) : "";
+            var fnx = cfg != null ? HqListName(hqFilters, cfg.FilterNx) : "";
+            if (string.IsNullOrEmpty(f1x)) f1x = status.ActiveFilter;
+            if (string.IsNullOrEmpty(fnx)) fnx = status.ActiveFilter;
+            HqChainFilter1x.Text = string.IsNullOrEmpty(f1x) ? "—" : f1x;
+            HqChainFilterNx.Text = string.IsNullOrEmpty(fnx) ? "—" : fnx;
+
+            HqChainShaperLabel.Text = Lang.T(isPcm ? "抖动" : "调制");
+            var shaper = cfg != null ? HqListName(hqShapers, cfg.Shaper) : "";
+            if (string.IsNullOrEmpty(shaper)) shaper = status.ActiveShaper;
+            HqChainShaper.Text = string.IsNullOrEmpty(shaper) ? "—" : shaper;
+
+            // 升频：在播时用 HQPlayer 上报的实际输出规格（rate/bits/channels），不自己推算
+            if (status.State == 2 && status.ActiveRate > 0)
+            {
+                var bits = status.ActiveBits > 0 ? $"/{status.ActiveBits}bit" : "";
+                var ch = status.ActiveChannels > 0 ? $"/{status.ActiveChannels}ch" : "";
+                HqChainRate.Text = $"{status.ActiveRate}Hz{bits}{ch}";
+            }
+            else if (cfg != null && hqRates.Count > 0)
+            {
+                var rateEntry = hqRates.FirstOrDefault(r => r.Index == cfg.Rate);
+                HqChainRate.Text = rateEntry == null || rateEntry.Rate <= 0
+                    ? "auto"
+                    : $"{rateEntry.Rate}Hz";
+            }
+            else
+            {
+                HqChainRate.Text = status.ActiveRate > 0 ? $"{status.ActiveRate}Hz" : "auto";
+            }
+
+            // HQPlayer 在另一台机器上时，本机没有它的 settings.xml，不能拿本机配置冒充
+            var hqHost = (HqHost ?? "").Trim();
+            var isLocalHq = hqHost.Length == 0 ||
+                            hqHost.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                            hqHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                            hqHost == "::1";
+            var device = isLocalHq ? HqOutputConfig.Describe() : new HqOutputDesc();
+            HqChainDevice.Text = string.IsNullOrEmpty(device.Main) ? "HQPlayer" : device.Main;
+            // GetRates 只有 auto 一条，说明 HQPlayer 当前没枚举到输出设备（NAA 不在线时就是这样）
+            var deviceFound = hqRates.Count > 1;
+            var deviceDetail = JoinDetail(device.Backend, device.Detail);
+            if (string.IsNullOrEmpty(deviceDetail) && !isLocalHq)
+                deviceDetail = Lang.T("远程主机") + " " + hqHost;
+            HqChainDeviceDetail.Text = deviceDetail;
+            HqChainDeviceDetail.ToolTip = HqChainDeviceDetail.Text.Replace('\u00A0', ' ');
+            HqChainDeviceState.Text = Lang.T("未找到设备");
+            HqChainDeviceState.Visibility = deviceFound ? Visibility.Collapsed : Visibility.Visible;
+            HqChainSpeed.Text = status.ProcessSpeed > 0 ? $"{status.ProcessSpeed:0.0}x" : "";
+            HqStatusText.Text = HqStateWord(status.State);
+        }
+
+        private void RenderFoobarChain()
+        {
+            HqChainTitle.Text = "Foobar2000";
+            ShowHqProcessingRows(false);
+            HqChainSource.Text = CurrentSourceText();
+            HqChainSpeed.Text = "";
+            var st = fbStatus;
+            var connected = st != null;
+            HqStatusDot.Fill = (Brush)FindResource(connected ? "OkBrush" : "TextDimBrush");
+            if (!connected)
+            {
+                HqStatusText.Text = Lang.T("未连接");
+                HqChainDevice.Text = "—";
+                HqChainDeviceDetail.Text = "";
+                HqChainDeviceState.Visibility = Visibility.Collapsed;
+                return;
+            }
+            var state = st!.State == "playing" ? 2 : st.IsPaused ? 1 : 0;
+            HqStatusText.Text = HqStateWord(state);
+            HqChainDevice.Text = "Foobar2000";
+            HqChainDeviceDetail.Text = foobarActiveOutput;
+            HqChainDeviceState.Visibility = Visibility.Collapsed;
+        }
+
+        private void RenderSystemChain()
+        {
+            HqChainTitle.Text = Lang.T("系统输出");
+            ShowHqProcessingRows(false);
+            HqChainSource.Text = CurrentSourceText();
+            HqChainSpeed.Text = "";
+            var has = systemPlayer.HasFile;
+            HqStatusDot.Fill = (Brush)FindResource(has ? "OkBrush" : "TextDimBrush");
+            HqStatusText.Text = has ? HqStateWord(systemPlayer.IsPlaying ? 2 : 0) : Lang.T("待播放");
+            HqChainDevice.Text = Lang.T("系统输出");
+            HqChainDeviceDetail.Text = "";
+            HqChainDeviceState.Visibility = Visibility.Collapsed;
+        }
         private async Task TryConnectHqAsync()
         {
             if (!hqOn) return;
@@ -367,6 +624,7 @@ namespace AuralDesk
                     hqFailCount = 0;
                     LogQqDebug(string.Format(Lang.F("HQPlayer 已连接 {0}:{1}"), HqHost, HqPort));
                     SetHqConnected(true);
+                    await RefreshHqChainAsync(forceLists: true);
                     return;
                 }
                 await Task.Delay(1500);
@@ -859,6 +1117,7 @@ namespace AuralDesk
             if (!loaded) return;
             StopOutput();
             if (UseHqOutput) _ = TryConnectHqAsync();
+            UpdateChainCard();
             SaveSettings();
         }
 
@@ -2008,7 +2267,7 @@ namespace AuralDesk
                         SyncPlayIcon();
                         UpdateNowPlayingInfo(title, singer, QqSourcePrefix + quality.ToUpperInvariant());
                         ShowNoLyrics();
-                        SetStatus(string.Format(Lang.F("foobar2000 播放：{0}"), Path.GetFileName(file)));
+                        SetStatus(string.Format(Lang.F("Foobar2000 播放：{0}"), Path.GetFileName(file)));
                         AddToQueue(new QueueTrack
                         {
                             Title = title,
@@ -6035,6 +6294,12 @@ namespace AuralDesk
         }
         private void PlayTick(object? sender, EventArgs e)
         {
+            // HQPlayer 不是当前输出时，左下角链路卡片仍要反映它的真实状态：2 秒刷一次
+            if (!UseHqOutput && hqOn && (DateTime.UtcNow - lastHqChainPoll).TotalSeconds >= 2)
+            {
+                lastHqChainPoll = DateTime.UtcNow;
+                _ = RefreshHqChainAsync();
+            }
             if (UseHqOutput)
             {
                 _ = HqPollAsync();
@@ -6109,13 +6374,21 @@ namespace AuralDesk
                 if (status == null)
                 {
                     fbFailCount++;
-                    if (fbFailCount >= 2 && fbIsPlaying)
+                    if (fbFailCount >= 2)
                     {
+                        var wasPlaying = fbIsPlaying;
                         fbIsPlaying = false;
                         fbHadPlayed = false;
                         FbClockSetRunning(false);
-                        SyncPlayIcon();
-                        SetStatus(Lang.T("foobar2000 连接已断开"));
+                        fbStatus = null;
+                        foobarActiveOutput = "";
+                        UpdateChainCard();
+                        // 通知只在「本来在播」时提示；停止/暂停时关闭 foobar 也要把卡片置为未连接
+                        if (wasPlaying)
+                        {
+                            SyncPlayIcon();
+                            SetStatus(Lang.T("Foobar2000 连接已断开"));
+                        }
                     }
                     return;
                 }
@@ -6123,6 +6396,14 @@ namespace AuralDesk
                 var prevState = fbPrevState;
                 fbPrevState = status.State;
                 fbStatus = status;
+                // foobar 的输出设备 2 秒刷新一次（链路卡片用）
+                if ((DateTime.UtcNow - lastFoobarOutputPoll).TotalSeconds > 2)
+                {
+                    lastFoobarOutputPoll = DateTime.UtcNow;
+                    var outDesc = await Task.Run(() => foobar.GetActiveOutputDescription());
+                    if (!string.IsNullOrEmpty(outDesc)) foobarActiveOutput = outDesc;
+                }
+                UpdateChainCard();
                 if (status.Duration > 1) fbLastDuration = status.Duration;
                 if (status.IsPlaying) fbLastPos = status.Position;
                 FbClockSetRunning(status.IsPlaying);
@@ -6186,7 +6467,7 @@ namespace AuralDesk
             }
         }
 
-        /// <summary>foobar2000 播放/暂停切换。</summary>
+        /// <summary>Foobar2000 播放/暂停切换。</summary>
         private async Task FbPlayToggleAsync()
         {
             var ok = await Task.Run(() => foobar.PlayPause());
@@ -6208,7 +6489,7 @@ namespace AuralDesk
         }
 
         /// <summary>
-        /// 把本地文件交给 foobar2000 播放（beefweb HTTP API）。
+        /// 把本地文件交给 Foobar2000 播放（beefweb HTTP API）。
         /// 返回 false 时已完成提示，调用方按需决定是否跳过当前曲。
         /// </summary>
         private async Task<bool> PlayViaFoobarAsync(string file)
@@ -6217,9 +6498,9 @@ namespace AuralDesk
             if (result != FoobarPlayResult.Ok)
             {
                 SetStatus(result == FoobarPlayResult.RestartRequired
-                    ? Lang.T("已把缓存目录加入 beefweb 白名单，请重启 foobar2000 后重试")
-                    : Lang.T("foobar2000 播放失败：请确认 foobar2000 已启动并安装 beefweb 插件"));
-                LogQqDebug("foobar2000 播放失败: " + file);
+                    ? Lang.T("已把缓存目录加入 beefweb 白名单，请重启 Foobar2000 后重试")
+                    : Lang.T("Foobar2000 播放失败：请确认 Foobar2000 已启动并安装 beefweb 插件"));
+                LogQqDebug("Foobar2000 播放失败: " + file);
                 return false;
             }
             fbIsPlaying = true;
@@ -6287,7 +6568,28 @@ namespace AuralDesk
             try
             {
                 lastHqPoll = DateTime.UtcNow;
-                var status = await Task.Run(() => hqPlayer.GetStatus());
+                var status = await Task.Run(() =>
+                {
+                    var s = hqPlayer.GetStatus();
+                    if (s == null) return s;
+                    // 处理链（配置值）+ 四张枚举表：卡片要显示名字而不是索引。
+                    // 列表只在模式变化时失效，平时走 60s 缓存。
+                    var st = hqPlayer.GetState();
+                    if (st != null && st.Mode != hqChainModeSeen)
+                    {
+                        hqPlayer.InvalidateLists();
+                        hqChainModeSeen = st.Mode;
+                    }
+                    hqChainState = st;
+                    hqFilters = hqPlayer.GetList("filters");
+                    hqShapers = hqPlayer.GetList("shapers");
+                    // 采样率列表能直接反映输出设备在不在线，刷新要快（2 秒）
+                    var refreshRates = (DateTime.UtcNow - lastHqRatesPoll).TotalSeconds > 2;
+                    if (refreshRates) lastHqRatesPoll = DateTime.UtcNow;
+                    hqRates = hqPlayer.GetList("rates", refreshRates);
+                    hqModes = hqPlayer.GetList("modes");
+                    return s;
+                });
                 if (status == null)
                 {
                     hqFailCount++;
@@ -6295,6 +6597,8 @@ namespace AuralDesk
                     {
                         SetHqConnected(false);
                         hqLastStatus = null;
+                        hqChainState = null;
+                        UpdateChainCard();
                         hqPrevState = -1;
                         hqAwaitStart = false;
                         hqPlayRequestTime = DateTime.MinValue;
@@ -6310,6 +6614,7 @@ namespace AuralDesk
                 hqFailCount = 0;
                 hqLastStatus = status;
                 SetHqConnected(true, status.ActiveRate, status.ActiveMode, status.Track, status.TracksTotal);
+                UpdateChainCard();
                 hqVolume = status.Volume;
                 if (!hqVolumeEditing && HqVolumeBox != null)
                     HqVolumeBox.Text = hqVolume.ToString("0.#", CultureInfo.InvariantCulture);
