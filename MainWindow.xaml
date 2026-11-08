@@ -45,8 +45,9 @@
 
                 <!-- 输出链路卡片（HQPlayer / Foobar2000 / 系统输出） -->
                 <Border DockPanel.Dock="Bottom" CornerRadius="10" Background="{StaticResource BgCardBrush}"
-                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="10,8,10,9">
-                    <StackPanel>
+                        BorderBrush="{StaticResource BorderCardBrush}" BorderThickness="1" Padding="10,8,10,9"
+                        MinHeight="56">
+                    <StackPanel VerticalAlignment="Center">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
