@@ -638,6 +638,8 @@ namespace AuralDesk
         /// <summary>停止当前输出（系统输出与 HQPlayer 一起停，切换音源/切歌时调用）。</summary>
         private void StopOutput()
         {
+            // 先结算播放上报，再停播放器（此时位置还是有效的）
+            EndPlayReport();
             try { systemPlayer.Stop(); } catch { }
             // foobar 客户端是同步 HTTP；StopOutput 在 UI 线程上调用，
             // 连接挂起时会卡住界面，放到后台线程
@@ -4533,6 +4535,10 @@ namespace AuralDesk
         private int playGeneration;   // 播放会话代际号：切歌后使旧的下载/播放回调失效
         private bool cacheBusy;
         private DateTime lastPlayStart = DateTime.MinValue;
+        // QQ 播放上报（听歌记录 + 最近播放）
+        private string playReportMid = "";
+        private long playReportSongId;
+        private double playReportLastSentPos = -1;
         private bool playlistAutoExtend;
         private int qqListTotal;
         private readonly Random shuffleRng = new();
@@ -4791,8 +4797,86 @@ namespace AuralDesk
             }
         }
 
+        /// <summary>当前输出方式下已经播放到的秒数（用于上报）。</summary>
+        private double CurrentPlaybackSeconds()
+        {
+            if (UseHqOutput) return playbackPos.TotalSeconds;
+            if (UseFoobarOutput) return FbElapsedSeconds();
+            if (systemPlayer.HasFile) return systemPlayer.Position.TotalSeconds;
+            return 0;
+        }
+
+        private void BeginPlayReport(QueueTrack track)
+        {
+            var song = track.QqSong;
+            if (song == null || string.IsNullOrEmpty(song.Mid) || song.Id <= 0)
+            {
+                playReportMid = "";
+                playReportSongId = 0;
+                playReportLastSentPos = -1;
+                return;
+            }
+            playReportMid = song.Mid;
+            playReportSongId = song.Id;
+            playReportLastSentPos = -1;
+        }
+
+        /// <summary>切歌/停止前结算当前曲：播够 5 秒且距上次上报超过 10 秒才补一次。</summary>
+        private void EndPlayReport()
+        {
+            if (string.IsNullOrEmpty(playReportMid)) return;
+            var pos = CurrentPlaybackSeconds();
+            if (pos >= 5 && (playReportLastSentPos < 0 || pos - playReportLastSentPos >= 10))
+                SendPlayReport(pos);
+            playReportMid = "";
+            playReportSongId = 0;
+            playReportLastSentPos = -1;
+        }
+
+        /// <summary>播放中：20 秒时首次上报，之后每 5 分钟补一次（和服务端“在听”的语义一致）。</summary>
+        private void TickPlayReport()
+        {
+            if (string.IsNullOrEmpty(playReportMid)) return;
+            var pos = CurrentPlaybackSeconds();
+            if (pos <= 0) return;
+            if (playReportLastSentPos < 0)
+            {
+                if (pos >= 20) SendPlayReport(pos);
+            }
+            else if (pos - playReportLastSentPos >= 300)
+            {
+                SendPlayReport(pos);
+            }
+        }
+
+        private void SendPlayReport(double positionSeconds)
+        {
+            var mid = playReportMid;
+            var songId = playReportSongId;
+            if (string.IsNullOrEmpty(mid) || songId <= 0) return;
+            playReportLastSentPos = positionSeconds;
+            var playMs = (int)Math.Min(int.MaxValue, Math.Round(positionSeconds * 1000));
+            var playlist = queueTracks
+                .Where(t => t.QqSong != null && t.QqSong.Id > 0)
+                .Select(t => t.QqSong!.Id)
+                .ToList();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var ok = await qqApi.ReportPlayAsync(mid, songId, "", playMs, playlist);
+                    if (ok) LogQqDebug($"播放上报成功: {playMs / 1000}s");
+                }
+                catch
+                {
+                    // 上报是旁路，失败不影响播放
+                }
+            });
+        }
+
         private async Task PlayQueueTrackAsync(QueueTrack track)
         {
+            EndPlayReport();
             try
             {
                 if (!IsPlayableAudioFile(track.Path) ||
@@ -4832,6 +4916,7 @@ namespace AuralDesk
                 }
                 isPlaying = true;
                 SyncPlayIcon();
+                BeginPlayReport(track);
                 if (track.QqSong != null)
                 {
                     UpdateNowPlayingInfo(track.QqSong.Title, track.QqSong.Singer, track.Source);
@@ -6334,6 +6419,8 @@ namespace AuralDesk
         }
         private void PlayTick(object? sender, EventArgs e)
         {
+            // QQ 播放上报（听歌记录/最近播放）与输出方式无关
+            TickPlayReport();
             // HQPlayer 不是当前输出时，左下角链路卡片仍要反映它的真实状态：2 秒刷一次
             if (!UseHqOutput && hqOn && (DateTime.UtcNow - lastHqChainPoll).TotalSeconds >= 2)
             {

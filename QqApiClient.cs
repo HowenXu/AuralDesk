@@ -418,6 +418,41 @@ namespace AuralDesk
             return CloneData(doc);
         }
 
+        /// <summary>
+        /// 向 QQ 音乐上报一次播放：写「听歌记录」（影响推荐）和「最近播放」。
+        /// playMs 是已经播放的毫秒数；playlist 是当前队列里 QQ 曲目的数字 ID。
+        /// 失败返回 false，调用方不应因此影响播放。
+        /// </summary>
+        public async Task<bool> ReportPlayAsync(string mid, long songId, string albumId,
+            int playMs, IEnumerable<long>? playlist)
+        {
+            if (string.IsNullOrEmpty(mid)) return false;
+            try
+            {
+                var body = JsonSerializer.Serialize(new
+                {
+                    mid,
+                    song_id = songId,
+                    album_id = string.IsNullOrEmpty(albumId) ? "0" : albumId,
+                    play_ms = Math.Max(0, playMs),
+                    playlist = playlist?.Where(id => id > 0).Distinct().Take(200).ToArray()
+                               ?? Array.Empty<long>()
+                });
+                using var doc = await PostJsonAsync("/report/play", body);
+                var d = doc.RootElement.GetProperty("data");
+                var listening = d.TryGetProperty("listening", out var l)
+                                && l.ValueKind == JsonValueKind.True;
+                var recent = d.TryGetProperty("recent", out var r)
+                             && r.ValueKind == JsonValueKind.True;
+                return listening || recent;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Write("播放上报失败: " + ex.Message);
+                return false;
+            }
+        }
+
         /// <summary>收藏歌曲到「我喜欢的音乐」（dirid=201）。</summary>
         public async Task<bool> AddFavSongAsync(long songId, int songType)
         {

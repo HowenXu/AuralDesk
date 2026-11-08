@@ -7,6 +7,7 @@ from .login import ROUTES as LOGIN_ROUTES
 from .lyric import ROUTES as LYRIC_ROUTES
 from .mv import ROUTES as MV_ROUTES
 from .recommend import ROUTES as RECOMMEND_ROUTES
+from .report import ROUTES as REPORT_ROUTES
 from .search import ROUTES as SEARCH_ROUTES
 from .singer import ROUTES as SINGER_ROUTES
 from .song import ROUTES as SONG_ROUTES
@@ -21,6 +22,7 @@ ROUTES: tuple[WebRoute, ...] = (
     *LYRIC_ROUTES,
     *MV_ROUTES,
     *RECOMMEND_ROUTES,
+    *REPORT_ROUTES,
     *SEARCH_ROUTES,
     *SINGER_ROUTES,
     *SONG_ROUTES,

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from ..modules.mv import MvApi
     from ..modules.private_message import PrivateMessageApi
     from ..modules.recommend import RecommendApi
+    from ..modules.report import ReportApi
     from ..modules.search import SearchApi
     from ..modules.singer import SingerApi
     from ..modules.song import SongApi
@@ -195,6 +196,13 @@ class Client:
         from ..modules.user import UserApi
 
         return UserApi(self)
+
+    @cached_property
+    def report(self) -> "ReportApi":
+        """听歌上报模块."""
+        from ..modules.report import ReportApi
+
+        return ReportApi(self)
 
     async def __aenter__(self) -> Self:  # noqa: D105
         return self
