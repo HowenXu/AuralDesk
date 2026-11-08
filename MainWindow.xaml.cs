@@ -68,7 +68,7 @@ namespace AuralDesk
         private Rect prevBounds;
         private DispatcherTimer? playTimer;
         private TimeSpan playbackPos;
-        private double totalDurationSeconds = 183;
+        private double totalDurationSeconds;
         private readonly List<TimeSpan> lyricTimes = new();
         private readonly List<TextBlock> lyricLines = new();
         private readonly List<Color> lyricOriginalColors = new();
@@ -223,7 +223,7 @@ namespace AuralDesk
                 // 切歌/手动停止时 Stop() 也会触发本事件，用时间窗区分自然播完
                 if ((DateTime.UtcNow - lastPlayStart).TotalMilliseconds < 500) return;
                 SyncPlayIcon();
-                await PlayNextQueueAsync();
+                await PlayNextQueueAsync(completed: true);
             }));
             SetPlaying(false);
             RestoreQueue();
@@ -639,7 +639,7 @@ namespace AuralDesk
         private void StopOutput()
         {
             // 先结算播放上报，再停播放器（此时位置还是有效的）
-            EndPlayReport();
+            EndPlaySession(false);
             try { systemPlayer.Stop(); } catch { }
             // foobar 客户端是同步 HTTP；StopOutput 在 UI 线程上调用，
             // 连接挂起时会卡住界面，放到后台线程
@@ -1412,6 +1412,7 @@ namespace AuralDesk
                 {
                     systemPlayer.SeekTo(TimeSpan.FromSeconds(position));
                 }
+                ReportPlaySeek(position);
             }));
         }
 
@@ -2830,6 +2831,7 @@ namespace AuralDesk
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            EndPlaySession(false, waitForReport: true);
             try
             {
                 if (settings.ResumeMode >= 2)
@@ -4535,10 +4537,10 @@ namespace AuralDesk
         private int playGeneration;   // 播放会话代际号：切歌后使旧的下载/播放回调失效
         private bool cacheBusy;
         private DateTime lastPlayStart = DateTime.MinValue;
-        // QQ 播放上报（听歌记录 + 最近播放）
-        private string playReportMid = "";
-        private long playReportSongId;
-        private double playReportLastSentPos = -1;
+        // QQ 播放上报：按真实播放墙钟计时，暂停/拖动不累计
+        private readonly Stopwatch playSessionClock = new();
+        private QueueTrack? playSessionTrack;
+        private bool playSessionActive;
         private bool playlistAutoExtend;
         private int qqListTotal;
         private readonly Random shuffleRng = new();
@@ -4735,8 +4737,9 @@ namespace AuralDesk
         }
 
         /// <summary>播放结束自动切下一首，并删除上一首缓存文件。</summary>
-        private async Task PlayNextQueueAsync()
+        private async Task PlayNextQueueAsync(bool completed = false)
         {
+            if (completed) EndPlaySession(true);
             if (currentQueueIndex >= 0 && currentQueueIndex < queueTracks.Count)
                 // 切走后不再标记为待播放，缓存文件保留在缓冲区内由 EnforceCacheLimit 按上限清理
                 queueTracks[currentQueueIndex].CacheState = "";
@@ -4797,75 +4800,70 @@ namespace AuralDesk
             }
         }
 
-        /// <summary>当前输出方式下已经播放到的秒数（用于上报）。</summary>
-        private double CurrentPlaybackSeconds()
+        /// <summary>真实输出是否正在播放；HQPlayer 请求刚发出但还没起播时不算。</summary>
+        private bool PlaybackClockRunningNow =>
+            UseHqOutput ? hqPrevState == 2
+            : UseFoobarOutput ? fbIsPlaying
+            : systemPlayer.HasFile && systemPlayer.IsPlaying;
+
+        private long[] ReportPlaylistIds() => queueTracks
+            .Where(t => t.QqSong != null && t.QqSong.Id > 0)
+            .Select(t => t.QqSong!.Id)
+            .Distinct()
+            .Take(200)
+            .ToArray();
+
+        private static int ParseDurationSeconds(string text)
         {
-            if (UseHqOutput) return playbackPos.TotalSeconds;
-            if (UseFoobarOutput) return FbElapsedSeconds();
-            if (systemPlayer.HasFile) return systemPlayer.Position.TotalSeconds;
+            var parts = (text ?? "").Split(':');
+            if (parts.Length == 3 &&
+                int.TryParse(parts[0], out var hours) &&
+                int.TryParse(parts[1], out var minutePart) &&
+                int.TryParse(parts[2], out var secondPart))
+                return Math.Max(0, hours * 3600 + minutePart * 60 + secondPart);
+            if (parts.Length == 2 &&
+                int.TryParse(parts[0], out var minutesOnly) &&
+                int.TryParse(parts[1], out var secondsOnly))
+                return Math.Max(0, minutesOnly * 60 + secondsOnly);
             return 0;
         }
 
-        private void BeginPlayReport(QueueTrack track)
+        private double CurrentTrackDurationSeconds()
         {
+            if (!UseHqOutput && !UseFoobarOutput &&
+                systemPlayer.HasFile && systemPlayer.Length.TotalSeconds > 1)
+                return systemPlayer.Length.TotalSeconds;
+            if (UseFoobarOutput && fbStatus != null && fbStatus.Duration > 1)
+                return fbStatus.Duration;
+            if (UseHqOutput && totalDurationSeconds > 1)
+                return totalDurationSeconds;
+            var qqDuration = playSessionTrack?.QqSong?.Duration ?? "";
+            return ParseDurationSeconds(qqDuration);
+        }
+
+        /// <summary>
+        /// 曲目开始输出时建立一次播放会话。QQ 客户端在加载完成时立即写
+        /// listening(0) 和「最近播放」，这里保持同样时序。
+        /// </summary>
+        private void BeginPlaySession(QueueTrack track)
+        {
+            if (playSessionActive) EndPlaySession(false);
+            playSessionActive = true;
+            playSessionTrack = track;
+            totalDurationSeconds = ParseDurationSeconds(track.QqSong?.Duration ?? "");
+            playSessionClock.Reset();
+            if (PlaybackClockRunningNow) playSessionClock.Start();
+
             var song = track.QqSong;
-            if (song == null || string.IsNullOrEmpty(song.Mid) || song.Id <= 0)
-            {
-                playReportMid = "";
-                playReportSongId = 0;
-                playReportLastSentPos = -1;
-                return;
-            }
-            playReportMid = song.Mid;
-            playReportSongId = song.Id;
-            playReportLastSentPos = -1;
-        }
-
-        /// <summary>切歌/停止前结算当前曲：播够 5 秒且距上次上报超过 10 秒才补一次。</summary>
-        private void EndPlayReport()
-        {
-            if (string.IsNullOrEmpty(playReportMid)) return;
-            var pos = CurrentPlaybackSeconds();
-            if (pos >= 5 && (playReportLastSentPos < 0 || pos - playReportLastSentPos >= 10))
-                SendPlayReport(pos);
-            playReportMid = "";
-            playReportSongId = 0;
-            playReportLastSentPos = -1;
-        }
-
-        /// <summary>播放中：20 秒时首次上报，之后每 5 分钟补一次（和服务端“在听”的语义一致）。</summary>
-        private void TickPlayReport()
-        {
-            if (string.IsNullOrEmpty(playReportMid)) return;
-            var pos = CurrentPlaybackSeconds();
-            if (pos <= 0) return;
-            if (playReportLastSentPos < 0)
-            {
-                if (pos >= 20) SendPlayReport(pos);
-            }
-            else if (pos - playReportLastSentPos >= 300)
-            {
-                SendPlayReport(pos);
-            }
-        }
-
-        private void SendPlayReport(double positionSeconds)
-        {
-            var mid = playReportMid;
-            var songId = playReportSongId;
-            if (string.IsNullOrEmpty(mid) || songId <= 0) return;
-            playReportLastSentPos = positionSeconds;
-            var playMs = (int)Math.Min(int.MaxValue, Math.Round(positionSeconds * 1000));
-            var playlist = queueTracks
-                .Where(t => t.QqSong != null && t.QqSong.Id > 0)
-                .Select(t => t.QqSong!.Id)
-                .ToList();
+            if (song == null || string.IsNullOrEmpty(song.Mid) || song.Id <= 0) return;
+            var playlist = ReportPlaylistIds();
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var ok = await qqApi.ReportPlayAsync(mid, songId, "", playMs, playlist);
-                    if (ok) LogQqDebug($"播放上报成功: {playMs / 1000}s");
+                    var ok = await qqApi.ReportPlayStartAsync(
+                        song.Mid, song.Id, song.AlbumMid ?? "", playlist);
+                    if (ok) LogQqDebug("播放上报: start");
                 }
                 catch
                 {
@@ -4874,9 +4872,76 @@ namespace AuralDesk
             });
         }
 
+        /// <summary>每次 UI tick 同步真实播放状态；暂停时冻结，恢复后继续累计。</summary>
+        private void TickPlayReport()
+        {
+            if (!playSessionActive) return;
+            if (PlaybackClockRunningNow)
+            {
+                if (!playSessionClock.IsRunning) playSessionClock.Start();
+            }
+            else if (playSessionClock.IsRunning)
+            {
+                playSessionClock.Stop();
+            }
+        }
+
+        /// <summary>
+        /// 切歌/停止/关闭时结算：QQ 曲目按客户端语义发 stat6。
+        /// 自然播完时额外补 listening(歌曲总时长)。真实播放秒数与进度位置无关。
+        /// </summary>
+        private void EndPlaySession(bool completed, bool waitForReport = false)
+        {
+            if (!playSessionActive) return;
+            playSessionClock.Stop();
+            var playedSeconds = playSessionClock.Elapsed.TotalSeconds;
+            var track = playSessionTrack;
+            var durationSeconds = CurrentTrackDurationSeconds();
+            playSessionActive = false;
+            playSessionTrack = null;
+            playSessionClock.Reset();
+            if (track == null) return;
+
+            var song = track.QqSong;
+            if (song == null || string.IsNullOrEmpty(song.Mid) || song.Id <= 0) return;
+            var playSeconds = (int)Math.Round(playedSeconds);
+            var totalSeconds = Math.Max(0, (int)Math.Round(durationSeconds));
+            var playlist = ReportPlaylistIds();
+            var reportTask = Task.Run(async () =>
+            {
+                try
+                {
+                    var ok = await qqApi.ReportPlayEndAsync(
+                        song.Mid, song.Id, song.AlbumMid ?? "",
+                        playSeconds, totalSeconds, completed, playlist);
+                    if (ok) LogQqDebug($"播放上报: end {playSeconds}s completed={completed}");
+                }
+                catch
+                {
+                    // 上报是旁路，失败不影响播放
+                }
+            });
+            if (waitForReport) reportTask.Wait(TimeSpan.FromSeconds(3));
+        }
+
+        /// <summary>拖动进度时按 QQ 客户端行为补一次 listening(当前位置)。</summary>
+        private void ReportPlaySeek(double positionSeconds)
+        {
+            if (!playSessionActive) return;
+            var song = playSessionTrack?.QqSong;
+            if (song == null || string.IsNullOrEmpty(song.Mid)) return;
+            var positionMs = (int)Math.Min(int.MaxValue, Math.Max(0, positionSeconds) * 1000);
+            var playlist = ReportPlaylistIds();
+            _ = Task.Run(async () =>
+            {
+                try { await qqApi.ReportPlaySeekAsync(song.Mid, positionMs, playlist); }
+                catch { }
+            });
+        }
+
         private async Task PlayQueueTrackAsync(QueueTrack track)
         {
-            EndPlayReport();
+            EndPlaySession(false);
             try
             {
                 if (!IsPlayableAudioFile(track.Path) ||
@@ -4916,7 +4981,7 @@ namespace AuralDesk
                 }
                 isPlaying = true;
                 SyncPlayIcon();
-                BeginPlayReport(track);
+                BeginPlaySession(track);
                 if (track.QqSong != null)
                 {
                     UpdateNowPlayingInfo(track.QqSong.Title, track.QqSong.Singer, track.Source);
@@ -5471,6 +5536,14 @@ namespace AuralDesk
                 bytes = await qqApi.DownloadImageAsync(
                     $"https://y.gtimg.cn/music/photo_new/T002R300x300M000{mid}.jpg");
             coverBytesCache[mid] = bytes;
+            // 长期挂机听不同专辑时，封面缓存不能无限增长。
+            const int maxCachedCovers = 64;
+            if (coverBytesCache.Count > maxCachedCovers)
+            {
+                foreach (var key in coverBytesCache.Keys
+                             .Take(coverBytesCache.Count - maxCachedCovers))
+                    coverBytesCache.TryRemove(key, out _);
+            }
             return bytes;
         }
 
@@ -6000,6 +6073,7 @@ namespace AuralDesk
                 LogQqDebug("选择缓存目录失败: " + ex.Message);
             }
         }
+
         private static T? FindAncestor<T>(DependencyObject? d) where T : DependencyObject
         {
             while (d != null)
@@ -6451,7 +6525,7 @@ namespace AuralDesk
                     {
                         isPlaying = false;
                         SyncPlayIcon();
-                        _ = PlayNextQueueAsync();
+                        _ = PlayNextQueueAsync(completed: true);
                         return;
                     }
                 }
@@ -6470,7 +6544,7 @@ namespace AuralDesk
             }
             if (!isPlaying) return;
             playbackPos += TimeSpan.FromMilliseconds(100);
-            if (playbackPos.TotalSeconds >= totalDurationSeconds)
+            if (totalDurationSeconds > 0 && playbackPos.TotalSeconds >= totalDurationSeconds)
             {
                 UpdateProgressUi();
                 StopPlayback();
@@ -6585,7 +6659,7 @@ namespace AuralDesk
                 {
                     fbHadPlayed = false;
                     fbStatus = null;
-                    _ = PlayNextQueueAsync();
+                    _ = PlayNextQueueAsync(completed: true);
                 }
             }
             finally
@@ -6850,7 +6924,7 @@ namespace AuralDesk
                     hqPrevState = -1;
                     hqIsPlaying = false;
                     SyncPlayIcon();
-                    await PlayNextQueueAsync();
+                    await PlayNextQueueAsync(completed: true);
                 }
                 else if (wasPlaying && status.State == 0)
                 {

@@ -46,6 +46,7 @@ So AuralDesk is the *player + streaming front-end*, and HQPlayer remains the *up
 - **HQPlayer remote**: reads HQPlayer's playback state, track index and volume; both the desktop app and the phone remote can set its digital volume in dB.
 - **Lyrics & covers**: scrolling synced lyrics with translations; album and artist pages with artwork.
 - **Play queue**: full-playlist loading, shuffle, reorder/multi-delete, automatic next/previous caching with configurable buffer size & folder.
+- **Listening history**: reports plays to QQ Music with the client's own start/seek/end semantics (listening record, recently played, and stat6 play stream), so recommendations and the yearly recap stay in sync.
 - **Android remote**: scan-and-connect over your LAN; control playback/queue/search/favorites, media-session notifications.
 - **Remembers everything**: settings, quality, output; optionally resume last song & position.
 

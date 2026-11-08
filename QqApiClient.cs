@@ -419,32 +419,74 @@ namespace AuralDesk
         }
 
         /// <summary>
-        /// 向 QQ 音乐上报一次播放：写「听歌记录」（影响推荐）和「最近播放」。
-        /// playMs 是已经播放的毫秒数；playlist 是当前队列里 QQ 曲目的数字 ID。
-        /// 失败返回 false，调用方不应因此影响播放。
+        /// 曲目加载完成：QQ 客户端此时写 listening(0) 和「最近播放」。
         /// </summary>
-        public async Task<bool> ReportPlayAsync(string mid, long songId, string albumId,
-            int playMs, IEnumerable<long>? playlist)
+        public Task<bool> ReportPlayStartAsync(string mid, long songId, string albumId,
+            IEnumerable<long>? playlist)
         {
-            if (string.IsNullOrEmpty(mid)) return false;
+            if (string.IsNullOrEmpty(mid) || songId <= 0) return Task.FromResult(false);
+            return PostPlayReportAsync(new
+            {
+                kind = "start",
+                mid,
+                song_id = songId,
+                album_id = string.IsNullOrEmpty(albumId) ? "0" : albumId,
+                play_ms = 0,
+                playlist = PlaylistIds(playlist)
+            });
+        }
+
+        /// <summary>
+        /// 拖动进度：QQ 客户端会立即上报新的当前位置。
+        /// </summary>
+        public Task<bool> ReportPlaySeekAsync(string mid, int positionMs,
+            IEnumerable<long>? playlist)
+        {
+            if (string.IsNullOrEmpty(mid)) return Task.FromResult(false);
+            return PostPlayReportAsync(new
+            {
+                kind = "seek",
+                mid,
+                play_ms = Math.Max(0, positionMs),
+                playlist = PlaylistIds(playlist)
+            });
+        }
+
+        /// <summary>
+        /// 切歌/停止/退出：上报本段真实播放墙钟秒数到 stat6；
+        /// 自然播完时再补一次 listening(歌曲总时长)。
+        /// </summary>
+        public Task<bool> ReportPlayEndAsync(string mid, long songId, string albumId,
+            int playSeconds, int durationSec, bool completed, IEnumerable<long>? playlist)
+        {
+            if (string.IsNullOrEmpty(mid) || songId <= 0) return Task.FromResult(false);
+            return PostPlayReportAsync(new
+            {
+                kind = "end",
+                mid,
+                song_id = songId,
+                album_id = string.IsNullOrEmpty(albumId) ? "0" : albumId,
+                play_seconds = Math.Max(0, playSeconds),
+                duration_sec = Math.Max(0, durationSec),
+                completed,
+                playlist = PlaylistIds(playlist)
+            });
+        }
+
+        private static long[] PlaylistIds(IEnumerable<long>? playlist) =>
+            playlist?.Where(id => id > 0).Distinct().Take(200).ToArray()
+            ?? Array.Empty<long>();
+
+        private async Task<bool> PostPlayReportAsync(object payload)
+        {
             try
             {
-                var body = JsonSerializer.Serialize(new
-                {
-                    mid,
-                    song_id = songId,
-                    album_id = string.IsNullOrEmpty(albumId) ? "0" : albumId,
-                    play_ms = Math.Max(0, playMs),
-                    playlist = playlist?.Where(id => id > 0).Distinct().Take(200).ToArray()
-                               ?? Array.Empty<long>()
-                });
-                using var doc = await PostJsonAsync("/report/play", body);
+                using var doc = await PostJsonAsync("/report/play",
+                    JsonSerializer.Serialize(payload));
                 var d = doc.RootElement.GetProperty("data");
-                var listening = d.TryGetProperty("listening", out var l)
-                                && l.ValueKind == JsonValueKind.True;
-                var recent = d.TryGetProperty("recent", out var r)
-                             && r.ValueKind == JsonValueKind.True;
-                return listening || recent;
+                return (d.TryGetProperty("listening", out var l) && l.ValueKind == JsonValueKind.True)
+                    || (d.TryGetProperty("recent", out var r) && r.ValueKind == JsonValueKind.True)
+                    || (d.TryGetProperty("stream", out var s) && s.ValueKind == JsonValueKind.True);
             }
             catch (Exception ex)
             {
