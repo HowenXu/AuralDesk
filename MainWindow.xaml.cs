@@ -511,7 +511,7 @@ namespace AuralDesk
                 HqChainShaper.Text = "—";
                 HqChainRate.Text = "—";
                 HqChainDevice.Text = "—";
-                HqChainDeviceDetail.Text = "";
+                SetHqDeviceDetail("");
                 HqChainDeviceState.Visibility = Visibility.Collapsed;
                 return;
             }
@@ -568,8 +568,7 @@ namespace AuralDesk
             var deviceDetail = JoinDetail(device.Backend, device.Detail);
             if (string.IsNullOrEmpty(deviceDetail) && !isLocalHq)
                 deviceDetail = Lang.T("远程主机") + " " + hqHost;
-            HqChainDeviceDetail.Text = deviceDetail;
-            HqChainDeviceDetail.ToolTip = HqChainDeviceDetail.Text.Replace('\u00A0', ' ');
+            SetHqDeviceDetail(deviceDetail);
             HqChainDeviceState.Text = Lang.T("未找到设备");
             HqChainDeviceState.Visibility = deviceFound ? Visibility.Collapsed : Visibility.Visible;
             HqChainSpeed.Text = status.ProcessSpeed > 0 ? $"{status.ProcessSpeed:0.0}x" : "";
@@ -589,14 +588,14 @@ namespace AuralDesk
             {
                 HqStatusText.Text = Lang.T("未连接");
                 HqChainDevice.Text = "—";
-                HqChainDeviceDetail.Text = "";
+                SetHqDeviceDetail("");
                 HqChainDeviceState.Visibility = Visibility.Collapsed;
                 return;
             }
             var state = st!.State == "playing" ? 2 : st.IsPaused ? 1 : 0;
             HqStatusText.Text = HqStateWord(state);
             HqChainDevice.Text = "Foobar2000";
-            HqChainDeviceDetail.Text = foobarActiveOutput;
+            SetHqDeviceDetail(foobarActiveOutput);
             HqChainDeviceState.Visibility = Visibility.Collapsed;
         }
 
@@ -610,8 +609,17 @@ namespace AuralDesk
             HqStatusDot.Fill = (Brush)FindResource(has ? "OkBrush" : "TextDimBrush");
             HqStatusText.Text = has ? HqStateWord(systemPlayer.IsPlaying ? 2 : 0) : Lang.T("待播放");
             HqChainDevice.Text = Lang.T("系统输出");
-            HqChainDeviceDetail.Text = "";
+            SetHqDeviceDetail("");
             HqChainDeviceState.Visibility = Visibility.Collapsed;
+        }
+
+        private void SetHqDeviceDetail(string text)
+        {
+            HqChainDeviceDetail.Text = text ?? "";
+            HqChainDeviceDetail.ToolTip = HqChainDeviceDetail.Text.Replace('\u00A0', ' ');
+            HqChainDeviceDetail.Visibility = string.IsNullOrWhiteSpace(text)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         }
         private async Task TryConnectHqAsync()
         {
