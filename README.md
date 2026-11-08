@@ -1,127 +1,122 @@
 # AuralDesk
 
-> 中文版 README：[README.zh-CN.md](README.zh-CN.md)
+English | [中文](README.zh-CN.md)
 
-> A streaming-music upsampling player for Hi-Fi setups: QQ Music Hi-Res download & decrypt → HQPlayer upsampling → your DAC (USB-exclusive or NAA).
+AuralDesk is a Windows streaming front-end for QQ Music. It downloads and decrypts a track locally, then hands the complete lossless file to HQPlayer for upsampling. Whether the DAC is connected over USB or NAA is left to HQPlayer.
 
-**Status:** mostly feature-complete. No plans for major new features — the road to embedding HQPlayer is blocked, so expect only small fixes and UX polish from here. (Nobody really uses this anyway...)
+![AuralDesk main window](docs/images/main.png)
 
-[Getting Started](#getting-started) · [Features](#features) · [Why not bundle HQPlayer](#why-hqplayer-is-not-bundled-inside-auraldesk) · [Third-party & Licenses](#third-party--licenses)
+## Status
 
----
+The app is in day-to-day use here and is basically feature-complete. I don't plan to add more large features; the remaining work is bug fixing and small UI improvements.
 
-## Introduction
+This is not a general-purpose music player. It was built around one workflow: QQ Music → local decrypted file → HQPlayer → DAC.
 
-AuralDesk is a **streaming upsampling player** for Windows. It is not a general-purpose Hi-Fi player — it is a streaming front-end **deeply tied to HQPlayer**: sign in to your QQ Music account, browse playlists/albums/artists/collections, download songs (**Hi-Res included**), decrypt them locally into full lossless files, and hand them to HQPlayer for real-time upsampling before delivery to your DAC over NAA or USB-exclusive output.
+## Why this exists
 
-The whole point of the app is to make "streaming upsampling" smooth and pleasant. HQPlayer owns the audio chain and can drive the DAC either USB-exclusive or over NAA — AuralDesk does not care which, it only feeds complete lossless files. Anything outside HQPlayer (plain system output, or the optional foobar2000 backend) is a convenience for quick auditions or for people who already have a foobar chain.
+QQ Music's UPnP output is convenient, but it normally stops at 48 kHz and does not pass Hi-Res through. AuralDesk fetches the original file, decrypts it on the PC, and gives HQPlayer the full sample rate and bit depth.
 
-There is also an Android remote: same LAN, scan-and-connect, browse/search/favourite, edit the queue, and control HQPlayer's transport and volume from the phone.
+The app also handles the boring parts: loading a whole playlist into the queue, caching the next tracks, cleaning up old files, fetching lyrics and covers, and keeping the QQ Music listening record in sync.
 
-> If you actually want a USB-exclusive *non-upsampling* path built in, file an issue — I don't need it myself. 😋
+## Screens
 
-**How is this different from "QQ Music UPnP → foobar2000 → HQPlayer"?**
+The expanded now-playing view. The lyric column follows the track, and the window can be switched to fullscreen:
 
-- QQ Music's UPnP path does **not** support Hi-Res (usually capped at 48 kHz). AuralDesk does: Hi-Res sources are downloaded and decrypted locally (verified 96 kHz end-to-end) and handed to HQPlayer unshortened in sample rate and bit depth.
-- No foobar2000 needed in the middle: download → decrypt → cache → upsample in one flow, with full playlists, automatic next/previous caching, and buffer cleanup. (foobar2000 is still available as an *optional* output backend — see below.)
+![Now playing and lyrics](docs/images/nowplaying.png)
 
-## Why HQPlayer is not bundled inside AuralDesk
+Settings are kept simple. Output and upsampling configuration still belongs to HQPlayer:
 
-A common question — "can you just ship HQPlayer inside the app?" — and unfortunately the honest answer is *no*:
+![Settings](docs/images/settings.png)
 
-- **HQPlayer is closed-source commercial software** (Signalyst). Its engine cannot be redistributed or embedded without a licensing agreement from the author.
-- There is **no Windows-native "Embedded" build**. HQPlayer Embedded only exists as a Linux image / Linux packages, so there is no engine we could wrap in an `.exe` anyway.
-- DSP changes (filters/modulators/rates) rebuild the audio pipeline, so they inherently interrupt the current track — this is a HQPlayer engine behavior we can't change from outside.
-- What we *can* do is integrate through its public control interfaces, which is exactly what AuralDesk does (remote control over HQPlayer's control API; playback, queueing, status, auto-advance).
+## What it can do
 
-So AuralDesk is the *player + streaming front-end*, and HQPlayer remains the *upsampling engine you run separately* — on the same PC or on a dedicated machine.
+- Browse the QQ Music home page, favorites, playlists, albums, artists, daily 30, and the endless recommendation feed.
+- Search QQ Music, open shared playlist/album/song links, and load a full list into the play queue.
+- Three quality choices: Hi-Res, Lossless, and Normal. If the selected tier does not exist, it falls back down the chain instead of picking DTS, spatial audio, or the upsampled "master" marketing tiers.
+- Decrypt QMC files locally. The decryptor is also maintained separately at [qmc-decrypt](https://github.com/HowenXu/qmc-decrypt).
+- Cache the next and previous tracks, show cache state in the queue, and clean old files according to a size or song-count limit.
+- Show synced lyrics, translations, album covers, and a fullscreen lyric view.
+- Output through HQPlayer, the system audio device, or foobar2000 with beefweb.
+- Control HQPlayer playback and digital volume from the desktop app or the Android remote.
+- Report playback to QQ Music using the same start/seek/end flow as the official client, so recommendations and the QQ Music yearly recap stay in sync.
 
-## Features
+## What it does not do
 
-- **Full QQ Music browsing**: favorites, playlists, albums, artists, search, daily picks, endless radar feed.
-- **Three quality tiers**: Hi-Res / Lossless / Normal, classified by the *actual* sample rate of the downloaded file (Hi-Res is mostly 96 kHz; falls back to lossless when no Hi-Res master exists — never to the marketing upsample tiers).
-- **Built-in decryption**: QMC files are decrypted offline by our own [qmc-decrypt](https://github.com/HowenXu/qmc-decrypt) (pure Python, zero deps, ships with the app).
-- **HQPlayer integration**: PCM/DSD upsampling via NAA or USB-exclusive; can auto-detect and launch HQPlayer.
-- **Output**: HQPlayer, system output, or foobar2000 (optional) — switch on the fly.
-- **HQPlayer remote**: reads HQPlayer's playback state, track index and volume; both the desktop app and the phone remote can set its digital volume in dB.
-- **Lyrics & covers**: scrolling synced lyrics with translations; album and artist pages with artwork.
-- **Play queue**: full-playlist loading, shuffle, reorder/multi-delete, automatic next/previous caching with configurable buffer size & folder.
-- **Listening history**: reports plays to QQ Music with the client's own start/seek/end semantics (listening record, recently played, and stat6 play stream), so recommendations and the yearly recap stay in sync.
-- **Android remote**: scan-and-connect over your LAN; control playback/queue/search/favorites, media-session notifications.
-- **Remembers everything**: settings, quality, output; optionally resume last song & position.
+- It cannot bundle HQPlayer. See below.
+- It does not write its own yearly listening report. Playback data goes to QQ Music.
+- Apple Music is still an empty folder. NetEase Cloud Music is not planned; the existing foobar2000 route is enough for my use.
 
-## Getting Started
+## Why HQPlayer is not bundled
 
-> We deliberately don't teach HQPlayer itself. Filter/modulator/NAA configuration is covered by the official HQPlayer documentation.
+HQPlayer is closed-source commercial software from Signalyst. Its engine cannot be redistributed or embedded without an agreement with the author.
 
-### 1. Install
+HQPlayer Embedded is a Linux product, not a Windows library that can be wrapped in an `.exe`. Changing filters, modulators, or output rates also rebuilds the audio pipeline and interrupts playback. That is how the engine works; an external program cannot make it seamless.
 
-1. Download `AuralDesk-Setup-*.exe` and run it. The installer checks for the .NET 8 runtime and points you to Microsoft's download if it is missing.
-2. On first launch, if no HQPlayer is detected you'll see a one-time notice that the app is designed to be used with HQPlayer upsampling (system output still works without it).
-3. Install `AuralDesk-Android-v*.apk` on your phone (same Wi-Fi as the PC).
+So AuralDesk stays on the player side. It talks to HQPlayer through its control protocol for playback, queue changes, status, and volume.
 
-### 2. Sign in to QQ Music
+## Install
 
-Open the app → Stream → Log in, scan the QR with QQ. The login stays on your machine and is not sent anywhere.
+1. Download `AuralDesk-Setup-*.exe` from [Releases](https://github.com/HowenXu/AuralDesk/releases).
+2. Run the installer. It checks for the .NET 8 Desktop Runtime and opens Microsoft's download page if it is missing.
+3. HQPlayer is recommended but not required. Use the system output if you only want to try the app.
+4. Install `AuralDesk-Android-*.apk` on a phone connected to the same LAN if you want the remote.
 
-### 3. Pick a quality
+## First run
 
-Settings → Quality: Hi-Res / Lossless / Normal.
+Open the app, switch to the streaming page, and sign in to QQ Music with the QR code. The credential is stored locally on this PC.
 
-- Hi-Res silently falls back to Lossless, then Normal, when a source doesn't have the tier (never the marketing tiers).
-- Quality is classified by actual sample rate of the download: 44.1/48 kHz FLAC = Lossless, above 48 kHz (typically 96 kHz) = Hi-Res, MP3 = Normal.
+Choose an output at the top right:
 
-### 4. Pick an output
+- `系统输出` sends audio to the default Windows device. Useful for a quick check.
+- `HQPlayer` sends the decrypted file to HQPlayer. Configure NAA, USB, filters, and modulators inside HQPlayer.
+- `Foobar2000` uses the beefweb component. foobar2000 owns the actual output; AuralDesk only tells it which file to play.
 
-- **System output**: quick local audition.
-- **HQPlayer**: configure upsampling/output (NAA or USB-exclusive) in HQPlayer itself; AuralDesk feeds it the full lossless file for real-time upsampling. An "auto-start HQPlayer" option is available under settings.
-- **foobar2000** (optional): uses the [beefweb](https://github.com/hyperblast/beefweb) component. Install beefweb into foobar2000, keep foobar running, then pick `foobar2000` as the output. foobar2000 owns the actual output — WASAPI exclusive, DSP chain and device selection all stay in foobar2000. AuralDesk only tells it which complete file to play.
-- **Note on foobar2000 testing**: I don't use foobar2000 myself (my chain is HQPlayer → NAA), so this output path is the least tested part of the app. If it misbehaves, please open an issue — reports are welcome, fixes may take a while.
+Then choose a quality in Settings. Hi-Res is selected by default. The actual tier is decided by the downloaded file: 44.1/48 kHz FLAC is Lossless, above 48 kHz is treated as Hi-Res, and MP3 is Normal.
 
-### 5. Daily use
+## Daily use
 
-- **Play**: single-click a song anywhere (playlist/album/artist/search) — the app queues the current page and plays; a "back to current song" button helps after scrolling.
-- **Caching**: the next songs (configurable count) are pre-cached automatically; cached items are flagged in the queue.
-- **Lyrics**: full-screen mode with fade in/out; scroll back to earlier lines anytime.
+Click a song in a playlist, album, artist page, or search result. AuralDesk loads the current page into the queue and starts from the song you clicked.
 
-### 6. FAQ
+The next tracks are cached in the background. Cached items are marked in the queue. The cache folder and limit are configurable; old files are removed when the limit is reached.
 
-- **Hi-Res download slow?** The app bypasses the system proxy for QQ CDN. If you run a proxy client, make sure it isn't force-routing the CDN.
-- **Can't reach HQPlayer?** Make sure it is running and listening; select "HQPlayer" as output; configure your NAA device under HQPlayer's Outputs.
-- **Phone can't find the PC?** Same Wi-Fi, and enable "LAN remote" in the PC settings.
+The bottom cover opens the now-playing view. In fullscreen, the current lyric stays in the upper-middle area and earlier lines remain scrollable.
+
+If the LAN remote is enabled in Settings, the phone app can control playback, the queue, search, favorites, and HQPlayer volume.
+
+## Notes
+
+- Hi-Res downloads bypass the system proxy for the QQ CDN. If downloads are unexpectedly slow, check whether a proxy client is force-routing those connections.
+- If HQPlayer is not reachable, make sure it is running, the control port matches, and the output device is configured inside HQPlayer.
+- The foobar2000 path is the least tested output here. My own chain is HQPlayer → NAA.
+- The app deliberately keeps no local yearly summary. Listening data is sent to QQ Music.
 
 ## Repository layout
 
-```
+```text
 AuralDesk/
-├── *.cs / *.xaml           Windows desktop app (WPF / .NET 8)
-├── qqapi/app/              QQ Music API backend (Python; decryption & sidecar)
-│   ├── qqmusic_api/        Upstream QQMusicApi library (GPL-3.0)
-│   ├── web/                Local sidecar (127.0.0.1:8123)
-│   ├── qmc_decrypt.py      Offline decryptor (same source as the qmc-decrypt repo)
-│   └── ogg2flac.py         OGG→FLAC helper
-├── android/                Android remote app (Kotlin)
-└── installer.iss           Inno Setup script
+├── *.cs / *.xaml          Windows desktop app (WPF / .NET 8)
+├── qqapi/app/             QQ Music API sidecar and local decryption
+├── android/               Android remote (Kotlin)
+├── docs/images/           README screenshots
+└── installer.iss          Inno Setup script
 ```
 
-## Third-party & Licenses
+## Third-party and licenses
 
-- [QQMusicApi](https://github.com/L-1124/QQMusicApi) (GPL-3.0) — QQ Music API wrapper, in `qqapi/app/qqmusic_api/`.
-- [unlock-music](https://github.com/rong6/unlock-music) — reference for the QMC decryption algorithms (`QmcDecoder.cs` and `qmc_decrypt.py`).
-- [NAudio](https://github.com/naudio/NAudio) (MIT) — audio output.
-- [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) — embedded web & login UI.
-- [qmc-decrypt](https://github.com/HowenXu/qmc-decrypt) (AGPL-3.0) — our standalone QQ Music QMC decryptor.
+- [QQMusicApi](https://github.com/L-1124/QQMusicApi) (GPL-3.0) for the QQ Music API wrapper.
+- [unlock-music](https://github.com/rong6/unlock-music) as a reference for the QMC algorithms.
+- [NAudio](https://github.com/naudio/NAudio) (MIT) for audio output.
+- [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) for the embedded web view.
+- [qmc-decrypt](https://github.com/HowenXu/qmc-decrypt) (AGPL-3.0) for the standalone QMC decryptor.
 
-This project is [AGPL-3.0](LICENSE); the `qqapi/app/qqmusic_api/` portion keeps upstream [QQMusicApi](https://github.com/L-1124/QQMusicApi)'s GPL-3.0 terms.
+The project is licensed under [AGPL-3.0](LICENSE). The code under `qqapi/app/qqmusic_api/` keeps the upstream GPL-3.0 terms.
 
-Copyright © 2026 [Howen_Xu](https://github.com/HowenXu). All rights reserved.
-
-For learning purposes only — delete downloaded content within 24 hours.
+For learning only. Delete any downloaded content within 24 hours.
 
 ## Roadmap
 
-- [x] QQ Music: download / decrypt / playback / lyrics / favorites / playlists / albums / artists / search
-- [x] HQPlayer upsampling (PCM / DSD, NAA / USB-exclusive)
-- [x] Android phone remote
-- [ ] Apple Music: just a new folder. I don't use it; if you want it, open an issue and I might get to it.
-- [ ] NetEase Cloud Music: foobar2000 UPnP already covers this use case, I don't use it, and the quality isn't better than QQ Music. Not doing it. 😋
+- [x] QQ Music browsing, download, decryption, playback, lyrics, queue, and search
+- [x] HQPlayer upsampling over NAA or USB
+- [x] Android remote
+- [ ] Apple Music
+- [ ] NetEase Cloud Music
