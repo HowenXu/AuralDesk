@@ -39,6 +39,10 @@ namespace AuralDesk
         // 只能用这两个残留值判断「是播到结尾停的」还是「用户手动停的」。
         private double hqLastPlayPos;
         private double hqLastPlayLen;
+        // 本曲第一次真正进入播放态的时间：起播缓冲阶段 Position 会一直是 0，
+        // 不能拿上一首的残留位置判断「播完」，也不能让极短的异常文件立刻触发切歌
+        private DateTime hqPlayingSince = DateTime.MinValue;
+        private bool hqPlayedThisTrack; // 本曲确实进入过播放态，跨过 2→3→0 的停止过渡
         private DateTime hqPlayRequestTime = DateTime.MinValue;
         private bool hqAwaitStart;   // 已把文件交给 HQPlayer、正在等它真正起播
         private double hqVolume;     // HQPlayer 当前音量（dB）
@@ -220,10 +224,29 @@ namespace AuralDesk
             InitLyrics();
             systemPlayer.PlaybackStopped += () => Dispatcher.BeginInvoke(new Action(async () =>
             {
-                // 切歌/手动停止时 Stop() 也会触发本事件，用时间窗区分自然播完
-                if ((DateTime.UtcNow - lastPlayStart).TotalMilliseconds < 500) return;
+                // 切歌/手动停止时 Stop() 也会触发本事件。除了起播时间窗，还要看播放头
+                // 是否真的走到结尾——否则换输出设备、点暂停后关闭文件都会把队列往前顶。
+                if ((DateTime.UtcNow - lastPlayStart).TotalMilliseconds < 800) return;
                 SyncPlayIcon();
-                await PlayNextQueueAsync(completed: true);
+                if (!systemPlayer.HasFile) return;
+                double length = 0, position = 0;
+                try
+                {
+                    length = systemPlayer.Length.TotalSeconds;
+                    position = systemPlayer.Position.TotalSeconds;
+                }
+                catch
+                {
+                    return;
+                }
+                if (length <= 1)
+                {
+                    // 读不出时长的文件通常是坏文件/解码器不支持，按失败计数而不是无限切歌
+                    await SkipBrokenTrackAsync("系统输出曲目时长未知");
+                    return;
+                }
+                if (position < length - 1.5) return;
+                await PlayNextQueueAsync(completed: true, automatic: true);
             }));
             SetPlaying(false);
             RestoreQueue();
@@ -667,8 +690,7 @@ namespace AuralDesk
             fbPlayRequestTime = DateTime.MinValue;
             hqPrevState = -1;
             hqIsPlaying = false;
-            hqLastPlayPos = 0;
-            hqLastPlayLen = 0;
+            ResetHqTrackProgress();
             // 主动停下时清掉起播看门狗：切歌后还要下载，不能被上一轮的时间戳带着往前走
             hqAwaitStart = false;
             hqPlayRequestTime = DateTime.MinValue;
@@ -677,6 +699,21 @@ namespace AuralDesk
                 try { hqPlayer.Stop(); } catch { }
                 try { hqPlayer.ClearPlaylist(); } catch { }
             }
+        }
+
+        /// <summary>
+        /// 每次把新文件交给 HQPlayer 时清掉上一首的播放残留。
+        /// HQPlayer 在起播缓冲阶段会先报 state=播放、position=0，
+        /// 如果沿用上一首接近末尾的位置，就会被误判成「已播完」而连跳。
+        /// </summary>
+        private void ResetHqTrackProgress()
+        {
+            hqLastPlayPos = 0;
+            hqLastPlayLen = 0;
+            lastHqPosition = -1;
+            lastHqMoveTime = DateTime.MinValue;
+            hqPlayingSince = DateTime.MinValue;
+            hqPlayedThisTrack = false;
         }
 
         // ------------------------------------------------------------------
@@ -2237,8 +2274,7 @@ namespace AuralDesk
                     }
                     hqIsPlaying = true;
                     hqPrevState = -1;
-                    hqLastPlayPos = 0;
-                    hqLastPlayLen = 0;
+                    ResetHqTrackProgress();
                     lastHqPoll = DateTime.MinValue;
                     hqPlayRequestTime = DateTime.UtcNow;
                     hqAwaitStart = true;
@@ -2605,6 +2641,7 @@ namespace AuralDesk
                     {
                         hqIsPlaying = true;
                         hqPrevState = -1;
+                        ResetHqTrackProgress();
                         lastHqPoll = DateTime.MinValue;
                         hqPlayRequestTime = DateTime.UtcNow;
                         hqAwaitStart = true;
@@ -4543,6 +4580,10 @@ namespace AuralDesk
 
         private int currentQueueIndex = -1;
         private int playGeneration;   // 播放会话代际号：切歌后使旧的下载/播放回调失效
+        private int queueAdvanceGate; // 同一时刻只允许一个切歌流程修改索引
+        private DateTime lastQueueAdvanceTime = DateTime.MinValue; // 防止多个触发源在几百毫秒内连跳
+        private int consecutiveSkipCount;              // 连续因文件/播放失败跳过的次数
+        private DateTime skipStreakStart = DateTime.MinValue;
         private bool cacheBusy;
         private DateTime lastPlayStart = DateTime.MinValue;
         // QQ 播放上报：按真实播放墙钟计时，暂停/拖动不累计
@@ -4665,6 +4706,9 @@ namespace AuralDesk
         private async Task PlayCurrentQueueAsync()
         {
             var gen = ++playGeneration; // 本代播放目标；后续切歌会递增，使本代过期的下载/播放回调失效
+            // 新目标一旦确定就清掉上一首的「已播完」状态：下一首可能还要下载几十秒，
+            // 这期间轮询仍会读到 HQPlayer 的停止态，不能让它反复触发自动切歌。
+            ResetHqTrackProgress();
             if (currentQueueIndex < 0 || currentQueueIndex >= queueTracks.Count)
             {
                 SetPlaying(false);
@@ -4706,8 +4750,7 @@ namespace AuralDesk
                 if (result == null)
                 {
                     SetStatus(string.Format(Lang.F("下载失败，跳过：{0}"), track.Title));
-                    currentQueueIndex++;
-                    await PlayCurrentQueueAsync();
+                    await SkipBrokenTrackAsync("下载失败: " + track.Title);
                     return;
                 }
                 // 下载期间队列可能被后台全量重建，用 Mid 定位当前项
@@ -4723,8 +4766,7 @@ namespace AuralDesk
 
             if (string.IsNullOrEmpty(track.Path))
             {
-                currentQueueIndex++;
-                await PlayCurrentQueueAsync();
+                await SkipBrokenTrackAsync("文件路径为空: " + track.Title);
                 return;
             }
 
@@ -4745,28 +4787,55 @@ namespace AuralDesk
         }
 
         /// <summary>播放结束自动切下一首，并删除上一首缓存文件。</summary>
-        private async Task PlayNextQueueAsync(bool completed = false)
+        private async Task PlayNextQueueAsync(bool completed = false, bool automatic = false,
+            bool force = false)
         {
-            if (completed) EndPlaySession(true);
-            if (currentQueueIndex >= 0 && currentQueueIndex < queueTracks.Count)
-                // 切走后不再标记为待播放，缓存文件保留在缓冲区内由 EnforceCacheLimit 按上限清理
-                queueTracks[currentQueueIndex].CacheState = "";
-            currentQueueIndex++;
-            if (currentQueueIndex >= queueTracks.Count)
+            // 播放器轮询、系统播放事件、遥控和用户按键都可能在同一瞬间请求切歌。
+            // 没有这道闸时每个来源都会给索引 +1，队列就会一路抢跑。
+            if (Interlocked.CompareExchange(ref queueAdvanceGate, 1, 0) != 0) return;
+            try
             {
-                // 队列播完：顺序模式下若列表还有下一页则续载后继续
-                if (playlistAutoExtend || qqTab == "radar")
+                var now = DateTime.UtcNow;
+                if (automatic && !force &&
+                    (now - lastQueueAdvanceTime).TotalMilliseconds < 1200)
                 {
-                    await ExtendQueueAsync();
-                    if (currentQueueIndex < queueTracks.Count)
+                    LogQqDebug("切歌触发过于频繁，已合并");
+                    return;
+                }
+                lastQueueAdvanceTime = now;
+                if (completed) EndPlaySession(true);
+                if (currentQueueIndex >= 0 && currentQueueIndex < queueTracks.Count)
+                    // 切走后不再标记为待播放，缓存文件保留在缓冲区内由 EnforceCacheLimit 按上限清理
+                    queueTracks[currentQueueIndex].CacheState = "";
+                currentQueueIndex++;
+                if (currentQueueIndex >= queueTracks.Count)
+                {
+                    // 队列播完：顺序模式下若列表还有下一页则续载后继续
+                    if (playlistAutoExtend || qqTab == "radar")
                     {
-                        await PlayCurrentQueueAsync();
+                        await ExtendQueueAsync();
+                        if (currentQueueIndex < queueTracks.Count)
+                        {
+                            // 续载成功，交给闸门外的统一起播流程
+                        }
+                        else
+                        {
+                            SetPlaying(false);
+                            SetStatus(Lang.T("队列播放完毕"));
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        SetPlaying(false);
+                        SetStatus(Lang.T("队列播放完毕"));
                         return;
                     }
                 }
-                SetPlaying(false);
-                SetStatus(Lang.T("队列播放完毕"));
-                return;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref queueAdvanceGate, 0);
             }
             await PlayCurrentQueueAsync();
         }
@@ -4947,6 +5016,35 @@ namespace AuralDesk
             });
         }
 
+        /// <summary>
+        /// 文件损坏/输出失败时的受控跳歌。正常情况下用户偶尔跳过一两首没关系，
+        /// 但如果整段缓存都放不出来，连续跳 6 首就停下并提示，避免队列被瞬间跑完。
+        /// </summary>
+        private async Task SkipBrokenTrackAsync(string reason)
+        {
+            var now = DateTime.UtcNow;
+            if (skipStreakStart == DateTime.MinValue ||
+                (now - skipStreakStart).TotalSeconds > 30)
+            {
+                skipStreakStart = now;
+                consecutiveSkipCount = 0;
+            }
+            consecutiveSkipCount++;
+            if (consecutiveSkipCount > 6)
+            {
+                LogQqDebug($"连续 {consecutiveSkipCount} 首无法播放，停止自动切歌：{reason}");
+                consecutiveSkipCount = 0;
+                skipStreakStart = DateTime.MinValue;
+                SetPlaying(false);
+                SetStatus(Lang.T("连续多首无法播放，已停止自动切歌"));
+                try { hqPlayer.Stop(); } catch { }
+                return;
+            }
+            LogQqDebug($"跳过无法播放的曲目（{consecutiveSkipCount}/6）：{reason}");
+            await Task.Delay(120);
+            await PlayNextQueueAsync(automatic: true, force: true);
+        }
+
         private async Task PlayQueueTrackAsync(QueueTrack track)
         {
             EndPlaySession(false);
@@ -4957,7 +5055,7 @@ namespace AuralDesk
                 {
                     SetStatus(string.Format(Lang.F("文件格式异常，跳过：{0}"), Path.GetFileName(track.Path)));
                     LogQqDebug("非音频文件，跳过: " + track.Path);
-                    _ = PlayNextQueueAsync();
+                    await SkipBrokenTrackAsync("文件格式异常: " + track.Path);
                     return;
                 }
                 if (UseHqOutput)
@@ -4966,11 +5064,12 @@ namespace AuralDesk
                     {
                         SetStatus(Lang.T("HQPlayer 播放失败：请确认 HQPlayer 已启动、输出设置正确"));
                         LogQqDebug("HQPlayer PlayFile 失败: " + track.Path);
-                        _ = PlayNextQueueAsync();
+                        await SkipBrokenTrackAsync("HQPlayer PlayFile 失败: " + track.Path);
                         return;
                     }
                     hqIsPlaying = true;
                     hqPrevState = -1;
+                    ResetHqTrackProgress();
                     lastHqPoll = DateTime.MinValue;
                     hqPlayRequestTime = DateTime.UtcNow;
                     hqAwaitStart = true;
@@ -4979,7 +5078,7 @@ namespace AuralDesk
                 {
                     if (!await PlayViaFoobarAsync(track.Path))
                     {
-                        _ = PlayNextQueueAsync();
+                        await SkipBrokenTrackAsync("Foobar2000 播放失败: " + track.Path);
                         return;
                     }
                 }
@@ -4988,6 +5087,8 @@ namespace AuralDesk
                     systemPlayer.Play(track.Path);
                 }
                 isPlaying = true;
+                consecutiveSkipCount = 0;
+                skipStreakStart = DateTime.MinValue;
                 SyncPlayIcon();
                 BeginPlaySession(track);
                 if (track.QqSong != null)
@@ -5008,7 +5109,7 @@ namespace AuralDesk
             catch (Exception ex)
             {
                 LogQqDebug("播放异常: " + ex);
-                _ = PlayNextQueueAsync();
+                await SkipBrokenTrackAsync("播放异常: " + ex.Message);
             }
         }
 
@@ -6533,7 +6634,7 @@ namespace AuralDesk
                     {
                         isPlaying = false;
                         SyncPlayIcon();
-                        _ = PlayNextQueueAsync(completed: true);
+                        _ = PlayNextQueueAsync(completed: true, automatic: true);
                         return;
                     }
                 }
@@ -6634,7 +6735,7 @@ namespace AuralDesk
                 {
                     fbPlayRequestTime = DateTime.MinValue;
                     LogQqDebug("foobar2000 长时间未开始播放，强制切下一首");
-                    _ = PlayNextQueueAsync();
+                    _ = PlayNextQueueAsync(automatic: true);
                     return;
                 }
                 if (status.IsPlaying)
@@ -6653,7 +6754,8 @@ namespace AuralDesk
                         // 播完后 position/duration 归零，用播放期间的残留值判断是否真的走到结尾；
                         // 用户在 foobar 里手动按停止（位置还在中段）时不自动跳曲，跟随播放器停在原处。
                         var nearEnd = fbLastDuration > 1 && fbLastPos >= fbLastDuration - 2.0;
-                        ended = fbLastDuration <= 1 || nearEnd;
+                        // 时长未知时不要猜「播完了」：猜错的代价是用户一按停止就整队往前跑
+                        ended = nearEnd;
                         // 只在状态刚变成 stopped 的那一次记日志，避免轮询刷屏
                         if (prevState != "stopped")
                             LogQqDebug(string.Format(
@@ -6667,7 +6769,7 @@ namespace AuralDesk
                 {
                     fbHadPlayed = false;
                     fbStatus = null;
-                    _ = PlayNextQueueAsync(completed: true);
+                    _ = PlayNextQueueAsync(completed: true, automatic: true);
                 }
             }
             finally
@@ -6827,10 +6929,24 @@ namespace AuralDesk
                 hqVolume = status.Volume;
                 if (!hqVolumeEditing && HqVolumeBox != null)
                     HqVolumeBox.Text = hqVolume.ToString("0.#", CultureInfo.InvariantCulture);
-                bool wasPlaying = hqPrevState == 2;
                 var oldHqPlaying = hqIsPlaying;
+                var prevHqState = hqPrevState;
                 hqPrevState = status.State;
                 hqIsPlaying = status.State == 2;
+                // 刚交给 HQPlayer 时可能还会读到上一首的尾巴（位置接近末尾）。
+                // 位置不可能比「发出播放命令后经过的时间」跑得还快，用这一点区分新旧曲。
+                if (status.State == 2 && hqPlayingSince == DateTime.MinValue)
+                {
+                    var sinceRequest = hqPlayRequestTime == DateTime.MinValue
+                        ? double.MaxValue
+                        : (DateTime.UtcNow - hqPlayRequestTime).TotalSeconds;
+                    if (status.Position < 5.0 ||
+                        (sinceRequest < 30 && status.Position <= sinceRequest + 15))
+                    {
+                        hqPlayingSince = DateTime.UtcNow;
+                        hqPlayedThisTrack = true;
+                    }
+                }
                 // 只在播放中记录有效位置/时长；HQPlayer 停止后会把这两个值清零
                 if (status.State == 2)
                 {
@@ -6856,7 +6972,7 @@ namespace AuralDesk
                 // 那段时间 HQPlayer 是停止态，用时间戳判断会误杀，导致队列一路抢跑到实际播放之前
                 if (hqAwaitStart &&
                     hqPlayRequestTime != DateTime.MinValue &&
-                    status.State != 2 &&
+                    !hqPlayedThisTrack &&
                     (DateTime.UtcNow - hqPlayRequestTime).TotalSeconds > 25)
                 {
                     LogQqDebug("HQPlayer 长时间未开始播放，强制切下一首");
@@ -6865,10 +6981,10 @@ namespace AuralDesk
                     lastHqPosition = -1;
                     lastHqMoveTime = DateTime.MinValue;
                     try { hqPlayer.Stop(); } catch { }
-                    await PlayNextQueueAsync();
+                    await PlayNextQueueAsync(automatic: true);
                     return;
                 }
-                if (status.State == 2 && hqPlayRequestTime != DateTime.MinValue)
+                if (hqPlayedThisTrack && hqPlayRequestTime != DateTime.MinValue)
                 {
                     hqAwaitStart = false;
                     hqPlayRequestTime = DateTime.MinValue;
@@ -6888,7 +7004,7 @@ namespace AuralDesk
                             lastHqPosition = -1;
                             lastHqMoveTime = DateTime.MinValue;
                             try { hqPlayer.Stop(); } catch { }
-                            await PlayNextQueueAsync();
+                            await PlayNextQueueAsync(automatic: true);
                             return;
                         }
                     }
@@ -6918,23 +7034,37 @@ namespace AuralDesk
                     }
                 }
                 // 自然播完：播放中位置到达文件末尾，或刚停止且最后位置接近末尾。
-                // 用户手动停止（位置在中间）不自动切下一首。
-                // 停止后 status.Length/Position 可能已经归零，用播放期间的残留值判断；
-                // 用 lastHqPosition 不行——上面「卡死检测」的 else 分支会先把它重置成 -1。
-                var knownLen = status.Length > 1 ? status.Length : hqLastPlayLen;
-                var knownPos = status.Position > 0 ? status.Position : hqLastPlayPos;
+                // 关键点：只在「停止后位置被清零」时才用残留值；播放中的 position=0
+                // 是正常的起播缓冲，绝不能拿它去套上一首的末尾位置，否则每首都会被秒切。
+                var knownLen = status.Length > 1
+                    ? status.Length
+                    : (status.State == 0 ? hqLastPlayLen : 0);
+                var knownPos = status.Position > 0
+                    ? status.Position
+                    : (status.State == 0 ? hqLastPlayPos : 0);
+                var trackAge = hqPlayingSince == DateTime.MinValue
+                    ? 0
+                    : (DateTime.UtcNow - hqPlayingSince).TotalSeconds;
+                // 再给曲目一个最短观察时间：除极短音效外，没有任何一首歌会在 2 秒内
+                // 合法播完；这条能挡住解码器/升频刚启动时的状态抖动。
+                var minPlaySeconds = knownLen > 1 ? Math.Min(2.0, knownLen / 2.0) : 2.0;
                 var finishedNaturally =
-                    wasPlaying && knownLen > 1 &&
+                    currentQueueIndex >= 0 && currentQueueIndex < queueTracks.Count &&
+                    hqPlayedThisTrack && knownLen > 1 && knownPos > 1.0 &&
+                    trackAge >= minPlaySeconds &&
                     ((status.State == 2 && knownPos >= knownLen - 0.8) ||
-                     (status.State == 0 && knownPos >= knownLen - 3.0));
+                     ((status.State == 0 || status.State == 3) &&
+                      knownPos >= knownLen - 3.0));
                 if (finishedNaturally)
                 {
+                    LogQqDebug($"HQPlayer 播完：state={status.State} " +
+                               $"pos={knownPos:F1}/{knownLen:F1} trackAge={trackAge:F1}s");
                     hqPrevState = -1;
                     hqIsPlaying = false;
                     SyncPlayIcon();
-                    await PlayNextQueueAsync(completed: true);
+                    await PlayNextQueueAsync(completed: true, automatic: true);
                 }
-                else if (wasPlaying && status.State == 0)
+                else if (hqPlayedThisTrack && status.State == 0 && prevHqState != 0)
                 {
                     // 用户手动停止：保持停止，不自动接下一首
                     hqIsPlaying = false;
